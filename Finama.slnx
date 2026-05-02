@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="Finama.API/Finama.API.csproj" />
+  <Project Path="Finama.Core/Finama.Core.csproj" />
+  <Project Path="Finama.Infrastructure/Finama.Infrastructure.csproj" />
+</Solution>
