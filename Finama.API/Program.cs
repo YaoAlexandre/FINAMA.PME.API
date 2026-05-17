@@ -108,7 +108,7 @@ builder.Services.AddCors(options =>
                 return true;
 
             // Autorise ton domaine de production Netlify
-            if (origin.EndsWith(".netlify.app") || origin.EndsWith(".netlify.dev"))
+            if (origin.EndsWith(".netlify.app") || origin.EndsWith(".onrender.com"))
                 return true;
 
             return false; // Bloque le reste du web par sécurité
