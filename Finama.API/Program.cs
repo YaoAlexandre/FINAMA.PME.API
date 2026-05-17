@@ -107,6 +107,7 @@ builder.Services.AddCors(options =>
             if (origin.EndsWith(".ngrok-free.app") || origin.EndsWith(".ngrok-free.dev"))
                 return true;
 
+            // Autorise ton domaine de production Netlify
             if (origin.EndsWith(".netlify.app") || origin.EndsWith(".netlify.dev"))
                 return true;
 
