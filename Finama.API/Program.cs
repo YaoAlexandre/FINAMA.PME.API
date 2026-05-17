@@ -18,6 +18,9 @@ JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
 
 var builder = WebApplication.CreateBuilder(args);
 
+// 🌟 Force Npgsql à mapper les DateTime locaux en UTC (Règle le problème de format de date)
+AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+
 // ─── Configuration de l'environnement ─────────────────────────────────────────
 // Note : 'allowedOrigins' reste disponible ici si tu en as besoin ailleurs, 
 // mais ton CORS utilise désormais l'analyse dynamique SetIsOriginAllowed.
