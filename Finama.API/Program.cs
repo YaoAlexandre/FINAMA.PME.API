@@ -107,6 +107,9 @@ builder.Services.AddCors(options =>
             if (origin.EndsWith(".ngrok-free.app") || origin.EndsWith(".ngrok-free.dev"))
                 return true;
 
+            if (origin.EndsWith(".netlify.app") || origin.EndsWith(".netlify.dev"))
+                return true;
+
             return false; // Bloque le reste du web par sécurité
         })
         .AllowAnyHeader()
