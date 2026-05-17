@@ -1,5 +1,5 @@
-using FluentValidation;
 using Finama.Core.DTOs;
+using FluentValidation;
 
 namespace Finama.Core.Validators;
 
@@ -36,7 +36,7 @@ public class CreerEcritureValidator : AbstractValidator<CreerEcritureRequest>
             .Must(LignesEquilibrees)
             .WithMessage(req =>
             {
-                var debit  = req.Lignes.Sum(l => l.Debit);
+                var debit = req.Lignes.Sum(l => l.Debit);
                 var credit = req.Lignes.Sum(l => l.Credit);
                 return $"L'écriture n'est pas équilibrée. Débit : {debit:N2} / Crédit : {credit:N2}.";
             });
@@ -44,7 +44,7 @@ public class CreerEcritureValidator : AbstractValidator<CreerEcritureRequest>
 
     private static bool LignesEquilibrees(List<CreerLigneEcritureRequest> lignes)
     {
-        var totalDebit  = lignes.Sum(l => l.Debit);
+        var totalDebit = lignes.Sum(l => l.Debit);
         var totalCredit = lignes.Sum(l => l.Credit);
         return Math.Abs(totalDebit - totalCredit) < 0.01m; // tolérance d'arrondi
     }

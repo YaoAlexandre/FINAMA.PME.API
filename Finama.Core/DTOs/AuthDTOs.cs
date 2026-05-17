@@ -11,8 +11,7 @@ public record RegisterTenantRequest(
     string MotDePasse,
     string NomAdministrateur,
     string PrenomAdministrateur,
-    string DeviseBase = "STN",
-    string PlanComptableCode = "OHADA"
+    Guid PaysId                        // ID depuis GET /api/pays
 );
 
 public record AuthResponse(
@@ -23,7 +22,11 @@ public record AuthResponse(
     string Email,
     string Role,
     Guid TenantId,
-    string NomEntreprise
+    string NomEntreprise,
+    string Pays,
+    string Devise,
+    string DeviseSymbole,
+    decimal TauxTVA
 );
 
 public record RefreshTokenRequest(

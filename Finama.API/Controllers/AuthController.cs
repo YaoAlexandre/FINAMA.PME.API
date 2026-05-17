@@ -96,13 +96,12 @@ public class AuthController : ControllerBase
     {
         return Ok(new
         {
-            Id         = User.FindFirst("sub")?.Value,
-            Email      = User.FindFirst(ClaimTypes.Email)?.Value
-                      ?? User.FindFirst("email")?.Value,
-            Nom        = User.FindFirst("nom")?.Value,
-            Role       = User.FindFirst("role")?.Value,
-            TenantId   = User.FindFirst("tenant_id")?.Value,
-            TenantNom  = User.FindFirst("tenant_nom")?.Value,
+            Id = User.FindFirst("sub")?.Value,
+            Email = User.FindFirst("email")?.Value,
+            Nom = User.FindFirst("nom")?.Value,
+            Role = User.FindFirst("role")?.Value,
+            TenantId = User.FindFirst("tenant_id")?.Value,
+            TenantNom = User.FindFirst("tenant_nom")?.Value,
         });
     }
 }

@@ -4,6 +4,7 @@ using Finama.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Finama.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260516130229_Init")]
+    partial class Init
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -24,9 +27,6 @@ namespace Finama.Infrastructure.Migrations
 
             modelBuilder.Entity("Finama.Core.Entities.ClasseComptable", b =>
                 {
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<int>("Numero")
                         .HasColumnType("int");
 
@@ -44,10 +44,15 @@ namespace Finama.Infrastructure.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
 
-                    b.HasKey("TenantId", "Numero");
+                    b.HasKey("Numero");
+
+                    b.HasIndex("TenantId");
 
                     b.ToTable("ClassesComptables", (string)null);
                 });
@@ -104,117 +109,6 @@ namespace Finama.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("CompteComptables");
-                });
-
-            modelBuilder.Entity("Finama.Core.Entities.Devise", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("Code")
-                        .IsRequired()
-                        .HasMaxLength(3)
-                        .HasColumnType("nvarchar(3)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime>("DateMiseAJour")
-                        .HasColumnType("datetime2");
-
-                    b.Property<bool>("EstActive")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bit")
-                        .HasDefaultValue(true);
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Libelle")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("Symbole")
-                        .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("nvarchar(10)");
-
-                    b.Property<decimal>("TauxBaseDollar")
-                        .HasColumnType("decimal(18,4)");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Code")
-                        .IsUnique();
-
-                    b.ToTable("Devises", (string)null);
-
-                    b.HasData(
-                        new
-                        {
-                            Id = new Guid("11111111-1111-1111-1111-111111111111"),
-                            Code = "USD",
-                            CreatedAt = new DateTime(2026, 5, 17, 15, 7, 53, 624, DateTimeKind.Utc).AddTicks(6098),
-                            DateMiseAJour = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local),
-                            EstActive = true,
-                            IsDeleted = false,
-                            Libelle = "Dollar américain",
-                            Symbole = "$",
-                            TauxBaseDollar = 1.0000m
-                        },
-                        new
-                        {
-                            Id = new Guid("22222222-2222-2222-2222-222222222222"),
-                            Code = "XOF",
-                            CreatedAt = new DateTime(2026, 5, 17, 15, 7, 53, 646, DateTimeKind.Utc).AddTicks(4085),
-                            DateMiseAJour = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local),
-                            EstActive = true,
-                            IsDeleted = false,
-                            Libelle = "Franc CFA (BCEAO)",
-                            Symbole = "FCFA",
-                            TauxBaseDollar = 615.0000m
-                        },
-                        new
-                        {
-                            Id = new Guid("33333333-3333-3333-3333-333333333333"),
-                            Code = "EUR",
-                            CreatedAt = new DateTime(2026, 5, 17, 15, 7, 53, 646, DateTimeKind.Utc).AddTicks(4255),
-                            DateMiseAJour = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local),
-                            EstActive = true,
-                            IsDeleted = false,
-                            Libelle = "Euro",
-                            Symbole = "€",
-                            TauxBaseDollar = 0.9200m
-                        },
-                        new
-                        {
-                            Id = new Guid("44444444-4444-4444-4444-444444444444"),
-                            Code = "GHS",
-                            CreatedAt = new DateTime(2026, 5, 17, 15, 7, 53, 646, DateTimeKind.Utc).AddTicks(4272),
-                            DateMiseAJour = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local),
-                            EstActive = true,
-                            IsDeleted = false,
-                            Libelle = "Cedi ghanéen",
-                            Symbole = "₵",
-                            TauxBaseDollar = 14.5000m
-                        },
-                        new
-                        {
-                            Id = new Guid("55555555-5555-5555-5555-555555555555"),
-                            Code = "NGN",
-                            CreatedAt = new DateTime(2026, 5, 17, 15, 7, 53, 646, DateTimeKind.Utc).AddTicks(4280),
-                            DateMiseAJour = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local),
-                            EstActive = true,
-                            IsDeleted = false,
-                            Libelle = "Naira nigérian",
-                            Symbole = "₦",
-                            TauxBaseDollar = 1490.0000m
-                        });
                 });
 
             modelBuilder.Entity("Finama.Core.Entities.EcritureComptable", b =>

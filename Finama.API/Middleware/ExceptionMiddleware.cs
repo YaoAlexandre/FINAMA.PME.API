@@ -18,9 +18,9 @@ public class ExceptionMiddleware
         ILogger<ExceptionMiddleware> logger,
         IHostEnvironment env)
     {
-        _next   = next;
+        _next = next;
         _logger = logger;
-        _env    = env;
+        _env = env;
     }
 
     public async Task InvokeAsync(HttpContext context)
@@ -39,11 +39,11 @@ public class ExceptionMiddleware
     {
         var (statusCode, message) = ex switch
         {
-            UnauthorizedAccessException => (HttpStatusCode.Unauthorized,   ex.Message),
-            KeyNotFoundException        => (HttpStatusCode.NotFound,       ex.Message),
-            InvalidOperationException   => (HttpStatusCode.UnprocessableEntity, ex.Message),
-            ArgumentException           => (HttpStatusCode.BadRequest,     ex.Message),
-            _                          => (HttpStatusCode.InternalServerError, "Une erreur interne est survenue.")
+            UnauthorizedAccessException => (HttpStatusCode.Unauthorized, ex.Message),
+            KeyNotFoundException => (HttpStatusCode.NotFound, ex.Message),
+            InvalidOperationException => (HttpStatusCode.UnprocessableEntity, ex.Message),
+            ArgumentException => (HttpStatusCode.BadRequest, ex.Message),
+            _ => (HttpStatusCode.InternalServerError, "Une erreur interne est survenue.")
         };
 
         // Log toujours l'exception complète côté serveur
@@ -55,15 +55,15 @@ public class ExceptionMiddleware
                 (int)statusCode, context.Request.Method, context.Request.Path, ex.Message);
 
         context.Response.ContentType = "application/json";
-        context.Response.StatusCode  = (int)statusCode;
+        context.Response.StatusCode = (int)statusCode;
 
         var reponse = new
         {
-            statut  = (int)statusCode,
+            statut = (int)statusCode,
             message,
-            chemin  = context.Request.Path.Value,
+            chemin = context.Request.Path.Value,
             // Stack trace uniquement en développement
-            detail  = _env.IsDevelopment() ? ex.ToString() : null,
+            detail = _env.IsDevelopment() ? ex.ToString() : null,
         };
 
         var json = JsonSerializer.Serialize(reponse, new JsonSerializerOptions

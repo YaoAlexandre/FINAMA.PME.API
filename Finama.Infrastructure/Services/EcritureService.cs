@@ -1,7 +1,7 @@
-using Microsoft.EntityFrameworkCore;
 using Finama.Core.DTOs;
 using Finama.Core.Entities;
 using Finama.Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
 
 namespace Finama.Infrastructure.Services;
 
@@ -12,6 +12,7 @@ public interface IEcritureService
     Task<EcritureDto> ObtenirAsync(Guid id);
     Task<EcritureDto> ValiderAsync(Guid id, Guid utilisateurId);
     Task SupprimerBrouillonAsync(Guid id, Guid utilisateurId);
+    Task<EcritureDto> ModifierAsync(Guid id, CreerEcritureRequest request, Guid utilisateurId);
 }
 
 public class EcritureService : IEcritureService
@@ -42,7 +43,7 @@ public class EcritureService : IEcritureService
 
         // Vérifier que tous les comptes existent et sont actifs
         var compteIds = request.Lignes.Select(l => l.CompteId).Distinct().ToList();
-        var comptes   = await _db.CompteComptables
+        var comptes = await _db.CompteComptables
             .Where(c => compteIds.Contains(c.Id) && c.EstActif)
             .ToListAsync();
 
@@ -54,24 +55,26 @@ public class EcritureService : IEcritureService
 
         var ecriture = new EcritureComptable
         {
-            Reference      = reference,
-            DateEcriture   = request.DateEcriture,
-            Libelle        = request.Libelle,
-            Journal        = request.Journal.ToUpper(),
-            Statut         = StatutEcriture.Brouillon,
-            ExerciceId     = request.ExerciceId,
-            FactureId      = request.FactureId,
-            UtilisateurId  = utilisateurId,
-            Lignes         = request.Lignes.Select(l => new LigneEcriture
+            Reference = reference,
+            DateEcriture = request.DateEcriture,
+            Libelle = request.Libelle,
+            Journal = request.Journal.ToUpper(),
+            Statut = StatutEcriture.Brouillon,
+            ExerciceId = request.ExerciceId,
+            FactureId = request.FactureId,
+            UtilisateurId = utilisateurId,
+            TenantId = exercice.TenantId,
+            Lignes = request.Lignes.Select(l => new LigneEcriture
             {
-                CompteId            = l.CompteId,
-                TiersId             = l.TiersId,
-                Libelle             = l.Libelle,
-                Debit               = l.Debit,
-                Credit              = l.Credit,
-                Devise              = l.Devise.ToUpper(),
-                TauxChange          = l.TauxChange,
-                MontantDeviseBase   = l.TauxChange.HasValue
+                TenantId = exercice.TenantId,
+                CompteId = l.CompteId,
+                TiersId = l.TiersId,
+                Libelle = l.Libelle,
+                Debit = l.Debit,
+                Credit = l.Credit,
+                Devise = l.Devise.ToUpper(),
+                TauxChange = l.TauxChange,
+                MontantDeviseBase = l.TauxChange.HasValue
                     ? Math.Round((l.Debit > 0 ? l.Debit : l.Credit) * l.TauxChange.Value, 2)
                     : null,
             }).ToList(),
@@ -117,9 +120,9 @@ public class EcritureService : IEcritureService
             .ToListAsync();
 
         return new PagedResult<EcritureDto>(
-            Items:      items.Select(MapToDto).ToList(),
-            Page:       filtre.Page,
-            PageSize:   filtre.PageSize,
+            Items: items.Select(MapToDto).ToList(),
+            Page: filtre.Page,
+            PageSize: filtre.PageSize,
             TotalItems: total,
             TotalPages: (int)Math.Ceiling(total / (double)filtre.PageSize)
         );
@@ -154,7 +157,7 @@ public class EcritureService : IEcritureService
 
         if (!ecriture.EstEquilibree)
         {
-            var debit  = ecriture.Lignes.Sum(l => l.Debit);
+            var debit = ecriture.Lignes.Sum(l => l.Debit);
             var credit = ecriture.Lignes.Sum(l => l.Credit);
             throw new InvalidOperationException(
                 $"L'écriture n'est pas équilibrée. Débit : {debit:N2} / Crédit : {credit:N2}.");
@@ -178,6 +181,60 @@ public class EcritureService : IEcritureService
 
         ecriture.IsDeleted = true; // soft delete
         await _db.SaveChangesAsync();
+    }
+
+    //  MOdification
+    public async Task<EcritureDto> ModifierAsync(Guid id, CreerEcritureRequest request, Guid utilisateurId)
+    {
+        // 1. Récupérer l'écriture existante avec ses lignes
+        var ecriture = await _db.Ecritures
+            .Include(e => e.Lignes)
+            .FirstOrDefaultAsync(e => e.Id == id);
+
+        if (ecriture == null)
+            throw new KeyNotFoundException("Écriture comptable introuvable.");
+
+        if (ecriture.Statut != StatutEcriture.Brouillon)
+            throw new InvalidOperationException("Action interdite : Seuls les brouillons peuvent être modifiés.");
+
+        // 2. Mise à jour de l'en-tête
+        ecriture.DateEcriture = request.DateEcriture;
+        ecriture.Journal = request.Journal;
+        ecriture.Libelle = request.Libelle;
+        ecriture.UtilisateurId = utilisateurId;
+
+        // 3. 🌟 CORRECTION CRITIQUE : Supprimer proprement les anciennes lignes du Change Tracker
+        // On extrait d'abord la liste pour ne pas altérer la boucle pendant la suppression
+        var anciennesLignes = ecriture.Lignes.ToList();
+        foreach (var ancienneLigne in anciennesLignes)
+        {
+            _db.LignesEcriture.Remove(ancienneLigne); // Dit explicitement à EF Core de DELETE cette ligne
+        }
+
+        // 4. INJECTION DES NOUVELLES LIGNES
+        foreach (var l in request.Lignes)
+        {
+            // On ajoute directement dans le DbContext ou dans la collection nettoyée
+            var nouvelleLigne = new LigneEcriture
+            {
+                Id = Guid.NewGuid(),
+                EcritureId = ecriture.Id, // On force le lien d'ID parent
+                TenantId = ecriture.TenantId,
+                CompteId = l.CompteId,
+                Libelle = l.Libelle,
+                Debit = l.Debit,
+                Credit = l.Credit,
+                Devise = "XOF"
+            };
+
+            _db.LignesEcriture.Add(nouvelleLigne);
+        }
+
+        // 5. Sauvegarder en base
+        await _db.SaveChangesAsync();
+
+        // 6. Retourner le DTO mis à jour
+        return await ObtenirAsync(ecriture.Id);
     }
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
@@ -210,26 +267,28 @@ public class EcritureService : IEcritureService
     }
 
     private static EcritureDto MapToDto(EcritureComptable e) => new(
-        Id:            e.Id,
-        Reference:     e.Reference,
-        DateEcriture:  e.DateEcriture,
-        Libelle:       e.Libelle,
-        Journal:       e.Journal,
-        Statut:        e.Statut.ToString(),
-        TotalDebit:    e.Lignes.Sum(l => l.Debit),
-        TotalCredit:   e.Lignes.Sum(l => l.Credit),
+        Id: e.Id,
+        Reference: e.Reference,
+        DateEcriture: e.DateEcriture,
+        ExerciceId: e.ExerciceId, //
+        Libelle: e.Libelle,
+        Journal: e.Journal,
+        Statut: e.Statut.ToString(),
+        TotalDebit: e.Lignes.Sum(l => l.Debit),
+        TotalCredit: e.Lignes.Sum(l => l.Credit),
         EstEquilibree: e.EstEquilibree,
         UtilisateurNom: $"{e.Utilisateur?.Prenom} {e.Utilisateur?.Nom}".Trim(),
-        CreatedAt:     e.CreatedAt,
-        Lignes:        e.Lignes.Select(l => new LigneEcritureDto(
-            Id:             l.Id,
-            CompteNumero:   l.Compte?.Numero  ?? "",
-            CompteLibelle:  l.Compte?.Libelle ?? "",
-            TiersNom:       l.Tiers?.Nom,
-            Libelle:        l.Libelle,
-            Debit:          l.Debit,
-            Credit:         l.Credit,
-            Devise:         l.Devise
+        CreatedAt: e.CreatedAt,
+        Lignes: e.Lignes.Select(l => new LigneEcritureDto(
+            Id: l.Id,
+            CompteId: l.CompteId,
+            CompteNumero: l.Compte?.Numero ?? "",
+            CompteLibelle: l.Compte?.Libelle ?? "",
+            TiersNom: l.Tiers?.Nom,
+            Libelle: l.Libelle,
+            Debit: l.Debit,
+            Credit: l.Credit,
+            Devise: l.Devise
         )).ToList()
     );
 }

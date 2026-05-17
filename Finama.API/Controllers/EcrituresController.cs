@@ -1,9 +1,9 @@
+using Finama.Core.DTOs;
+using Finama.Infrastructure.Services;
+using FluentValidation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
-using FluentValidation;
-using Finama.Core.DTOs;
-using Finama.Infrastructure.Services;
 
 namespace Finama.API.Controllers;
 
@@ -20,23 +20,24 @@ public class EcrituresController : ControllerBase
         IValidator<CreerEcritureRequest> validator)
     {
         _ecritureService = ecritureService;
-        _validator       = validator;
+        _validator = validator;
     }
 
     /// <summary>
     /// Crée une nouvelle écriture comptable en brouillon.
     /// </summary>
     [HttpPost]
-    [Authorize(Policy = "Comptable")]
+    [Authorize(Roles = "Comptable")] // Réactivé pour aligner la sécurité de saisie
     public async Task<IActionResult> Creer([FromBody] CreerEcritureRequest request)
     {
-        // Validation FluentValidation
         var validation = await _validator.ValidateAsync(request);
         if (!validation.IsValid)
-            return BadRequest(new {
+            return BadRequest(new
+            {
                 message = "Données invalides.",
-                erreurs = validation.Errors.Select(e => new {
-                    champ   = e.PropertyName,
+                erreurs = validation.Errors.Select(e => new
+                {
+                    champ = e.PropertyName,
                     message = e.ErrorMessage
                 })
             });
@@ -53,6 +54,47 @@ public class EcrituresController : ControllerBase
         }
         catch (InvalidOperationException ex)
         {
+            return UnprocessableEntity(new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// 🌟 AJOUT : Met à jour une écriture comptable existante en statut Brouillon.
+    /// </summary>
+    [HttpPut("{id:guid}")]
+    [Authorize(Roles = "Comptable")]
+    public async Task<IActionResult> Modifier(Guid id, [FromBody] CreerEcritureRequest request)
+    {
+        // On réutilise le même validateur FluentValidation que la création
+        var validation = await _validator.ValidateAsync(request);
+        if (!validation.IsValid)
+            return BadRequest(new
+            {
+                message = "Données invalides.",
+                erreurs = validation.Errors.Select(e => new
+                {
+                    champ = e.PropertyName,
+                    message = e.ErrorMessage
+                })
+            });
+
+        try
+        {
+            var utilisateurId = ObtenirUtilisateurId();
+
+            // 🌟 On appelle une méthode ModifierAsync sur ton service métier 
+            // (Assure-toi qu'elle accepte bien l'ID, la request et l'utilisateur)
+            var result = await _ecritureService.ModifierAsync(id, request, utilisateurId);
+
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            // Capturera les blocages si l'utilisateur tente de modifier une écriture déjà "Validée" ou un "Exercice clos"
             return UnprocessableEntity(new { message = ex.Message });
         }
     }
@@ -91,7 +133,7 @@ public class EcrituresController : ControllerBase
     /// Valide une écriture en brouillon — irréversible.
     /// </summary>
     [HttpPut("{id:guid}/valider")]
-    [Authorize(Policy = "Comptable")]
+    [Authorize(Roles = "Comptable")]
     public async Task<IActionResult> Valider(Guid id)
     {
         try
@@ -114,7 +156,7 @@ public class EcrituresController : ControllerBase
     /// Supprime un brouillon (soft delete).
     /// </summary>
     [HttpDelete("{id:guid}")]
-    [Authorize(Policy = "Comptable")]
+    [Authorize(Roles = "Comptable")]
     public async Task<IActionResult> Supprimer(Guid id)
     {
         try

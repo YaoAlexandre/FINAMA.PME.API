@@ -2,7 +2,7 @@
 
 using Finama.Core.Entities;
 
-namespace Finama.Infrastructure.Data.Seeds;
+namespace Finama.Infrastructure.Seeds;
 
 /// <summary>
 /// Plan comptable OHADA — comptes de niveau 1 et 2.

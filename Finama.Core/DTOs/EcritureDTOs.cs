@@ -22,12 +22,12 @@ public record CreerLigneEcritureRequest(
 );
 
 public record FiltreEcritureQuery(
-    string? Journal       = null,
-    DateTime? DateDebut   = null,
-    DateTime? DateFin     = null,
-    string? Statut        = null,
-    int Page              = 1,
-    int PageSize          = 20
+    string? Journal = null,
+    DateTime? DateDebut = null,
+    DateTime? DateFin = null,
+    string? Statut = null,
+    int Page = 1,
+    int PageSize = 20
 );
 
 // ─── Réponses ─────────────────────────────────────────────────────────────────
@@ -38,6 +38,7 @@ public record EcritureDto(
     DateTime DateEcriture,
     string Libelle,
     string Journal,
+    Guid ExerciceId,
     string Statut,
     decimal TotalDebit,
     decimal TotalCredit,
@@ -51,6 +52,7 @@ public record LigneEcritureDto(
     Guid Id,
     string CompteNumero,
     string CompteLibelle,
+    Guid CompteId,
     string? TiersNom,
     string? Libelle,
     decimal Debit,

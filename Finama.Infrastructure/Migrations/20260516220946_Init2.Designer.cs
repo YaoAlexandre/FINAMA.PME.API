@@ -12,8 +12,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Finama.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260502130804_Init")]
-    partial class Init
+    [Migration("20260516220946_Init2")]
+    partial class Init2
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -24,6 +24,36 @@ namespace Finama.Infrastructure.Migrations
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
+
+            modelBuilder.Entity("Finama.Core.Entities.ClasseComptable", b =>
+                {
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Numero")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Libelle")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("TenantId", "Numero");
+
+                    b.ToTable("ClassesComptables", (string)null);
+                });
 
             modelBuilder.Entity("Finama.Core.Entities.CompteComptable", b =>
                 {
@@ -357,6 +387,237 @@ namespace Finama.Infrastructure.Migrations
                     b.ToTable("LignesFacture");
                 });
 
+            modelBuilder.Entity("Finama.Core.Entities.PaysConfig", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CodeFiscal")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("CodeISO")
+                        .IsRequired()
+                        .HasMaxLength(2)
+                        .HasColumnType("nvarchar(2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeviseCode")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("nvarchar(3)");
+
+                    b.Property<string>("DeviseSymbole")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<bool>("EstActif")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Langue")
+                        .IsRequired()
+                        .HasMaxLength(2)
+                        .HasColumnType("nvarchar(2)");
+
+                    b.Property<string>("Nom")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<decimal>("TauxTVAStandard")
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CodeISO")
+                        .IsUnique();
+
+                    b.HasIndex("DeviseCode");
+
+                    b.ToTable("Pays");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("10000000-0000-0000-0000-000000000001"),
+                            CodeFiscal = "NIF",
+                            CodeISO = "TG",
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DeviseCode = "XOF",
+                            DeviseSymbole = "FCFA",
+                            EstActif = true,
+                            IsDeleted = false,
+                            Langue = "fr",
+                            Nom = "Togo",
+                            TauxTVAStandard = 18m
+                        },
+                        new
+                        {
+                            Id = new Guid("10000000-0000-0000-0000-000000000002"),
+                            CodeFiscal = "NIF",
+                            CodeISO = "ST",
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DeviseCode = "STD",
+                            DeviseSymbole = "Db",
+                            EstActif = true,
+                            IsDeleted = false,
+                            Langue = "pt",
+                            Nom = "São Tomé et Príncipe",
+                            TauxTVAStandard = 15m
+                        },
+                        new
+                        {
+                            Id = new Guid("10000000-0000-0000-0000-000000000003"),
+                            CodeFiscal = "NINEA",
+                            CodeISO = "SN",
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DeviseCode = "XOF",
+                            DeviseSymbole = "FCFA",
+                            EstActif = true,
+                            IsDeleted = false,
+                            Langue = "fr",
+                            Nom = "Sénégal",
+                            TauxTVAStandard = 18m
+                        },
+                        new
+                        {
+                            Id = new Guid("10000000-0000-0000-0000-000000000004"),
+                            CodeFiscal = "DGI",
+                            CodeISO = "CI",
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DeviseCode = "XOF",
+                            DeviseSymbole = "FCFA",
+                            EstActif = true,
+                            IsDeleted = false,
+                            Langue = "fr",
+                            Nom = "Côte d'Ivoire",
+                            TauxTVAStandard = 18m
+                        },
+                        new
+                        {
+                            Id = new Guid("10000000-0000-0000-0000-000000000005"),
+                            CodeFiscal = "IFU",
+                            CodeISO = "BJ",
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DeviseCode = "XOF",
+                            DeviseSymbole = "FCFA",
+                            EstActif = true,
+                            IsDeleted = false,
+                            Langue = "fr",
+                            Nom = "Bénin",
+                            TauxTVAStandard = 18m
+                        },
+                        new
+                        {
+                            Id = new Guid("10000000-0000-0000-0000-000000000006"),
+                            CodeFiscal = "IFU",
+                            CodeISO = "BF",
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DeviseCode = "XOF",
+                            DeviseSymbole = "FCFA",
+                            EstActif = true,
+                            IsDeleted = false,
+                            Langue = "fr",
+                            Nom = "Burkina Faso",
+                            TauxTVAStandard = 18m
+                        },
+                        new
+                        {
+                            Id = new Guid("10000000-0000-0000-0000-000000000007"),
+                            CodeFiscal = "NIF",
+                            CodeISO = "ML",
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DeviseCode = "XOF",
+                            DeviseSymbole = "FCFA",
+                            EstActif = true,
+                            IsDeleted = false,
+                            Langue = "fr",
+                            Nom = "Mali",
+                            TauxTVAStandard = 18m
+                        },
+                        new
+                        {
+                            Id = new Guid("10000000-0000-0000-0000-000000000008"),
+                            CodeFiscal = "NIF",
+                            CodeISO = "NE",
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DeviseCode = "XOF",
+                            DeviseSymbole = "FCFA",
+                            EstActif = true,
+                            IsDeleted = false,
+                            Langue = "fr",
+                            Nom = "Niger",
+                            TauxTVAStandard = 19m
+                        },
+                        new
+                        {
+                            Id = new Guid("10000000-0000-0000-0000-000000000009"),
+                            CodeFiscal = "NIU",
+                            CodeISO = "CM",
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DeviseCode = "XAF",
+                            DeviseSymbole = "FCFA",
+                            EstActif = true,
+                            IsDeleted = false,
+                            Langue = "fr",
+                            Nom = "Cameroun",
+                            TauxTVAStandard = 19.25m
+                        },
+                        new
+                        {
+                            Id = new Guid("10000000-0000-0000-0000-000000000010"),
+                            CodeFiscal = "NIF",
+                            CodeISO = "GA",
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DeviseCode = "XAF",
+                            DeviseSymbole = "FCFA",
+                            EstActif = true,
+                            IsDeleted = false,
+                            Langue = "fr",
+                            Nom = "Gabon",
+                            TauxTVAStandard = 18m
+                        },
+                        new
+                        {
+                            Id = new Guid("10000000-0000-0000-0000-000000000011"),
+                            CodeFiscal = "NIU",
+                            CodeISO = "CG",
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DeviseCode = "XAF",
+                            DeviseSymbole = "FCFA",
+                            EstActif = true,
+                            IsDeleted = false,
+                            Langue = "fr",
+                            Nom = "Congo",
+                            TauxTVAStandard = 18m
+                        },
+                        new
+                        {
+                            Id = new Guid("10000000-0000-0000-0000-000000000012"),
+                            CodeFiscal = "NIF",
+                            CodeISO = "GN",
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DeviseCode = "GNF",
+                            DeviseSymbole = "FG",
+                            EstActif = true,
+                            IsDeleted = false,
+                            Langue = "fr",
+                            Nom = "Guinée",
+                            TauxTVAStandard = 18m
+                        });
+                });
+
             modelBuilder.Entity("Finama.Core.Entities.Tenant", b =>
                 {
                     b.Property<Guid>("Id")
@@ -368,6 +629,9 @@ namespace Finama.Infrastructure.Migrations
 
                     b.Property<string>("Adresse")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("AssujettTVA")
+                        .HasColumnType("bit");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
@@ -388,13 +652,16 @@ namespace Finama.Infrastructure.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
-                    b.Property<string>("NINEA")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<string>("Nom")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("NumeroFiscal")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("PaysId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<int>("Plan")
                         .HasColumnType("int");
@@ -407,6 +674,9 @@ namespace Finama.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(450)");
 
+                    b.Property<decimal>("TauxTVA")
+                        .HasColumnType("decimal(5,2)");
+
                     b.Property<string>("Telephone")
                         .HasColumnType("nvarchar(max)");
 
@@ -414,6 +684,8 @@ namespace Finama.Infrastructure.Migrations
                         .HasColumnType("datetime2");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("PaysId");
 
                     b.HasIndex("SlugUnique")
                         .IsUnique();
@@ -539,6 +811,17 @@ namespace Finama.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("Utilisateurs");
+                });
+
+            modelBuilder.Entity("Finama.Core.Entities.ClasseComptable", b =>
+                {
+                    b.HasOne("Finama.Core.Entities.Tenant", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("Tenant");
                 });
 
             modelBuilder.Entity("Finama.Core.Entities.CompteComptable", b =>
@@ -683,6 +966,17 @@ namespace Finama.Infrastructure.Migrations
                     b.Navigation("Tenant");
                 });
 
+            modelBuilder.Entity("Finama.Core.Entities.Tenant", b =>
+                {
+                    b.HasOne("Finama.Core.Entities.PaysConfig", "Pays")
+                        .WithMany("Tenants")
+                        .HasForeignKey("PaysId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("Pays");
+                });
+
             modelBuilder.Entity("Finama.Core.Entities.Tiers", b =>
                 {
                     b.HasOne("Finama.Core.Entities.CompteComptable", "CompteComptable")
@@ -734,6 +1028,11 @@ namespace Finama.Infrastructure.Migrations
                     b.Navigation("Ecritures");
 
                     b.Navigation("Lignes");
+                });
+
+            modelBuilder.Entity("Finama.Core.Entities.PaysConfig", b =>
+                {
+                    b.Navigation("Tenants");
                 });
 
             modelBuilder.Entity("Finama.Core.Entities.Tenant", b =>

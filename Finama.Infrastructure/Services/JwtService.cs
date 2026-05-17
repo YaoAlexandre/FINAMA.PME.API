@@ -1,10 +1,10 @@
+using Finama.Core.Entities;
+using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
-using Microsoft.IdentityModel.Tokens;
-using Finama.Core.Entities;
-using Microsoft.Extensions.Options;
 
 namespace Finama.Infrastructure.Services;
 
@@ -37,15 +37,15 @@ public class JwtService : IJwtService
             new Claim("tenant_id",   tenant.Id.ToString()),
             new Claim("tenant_slug", tenant.SlugUnique),
             new Claim("tenant_nom",  tenant.Nom),
-            new Claim("role",        utilisateur.Role.ToString()),
+            new Claim("role",        ((RoleUtilisateur)utilisateur.Role).ToString()),
             new Claim("nom",         $"{utilisateur.Prenom} {utilisateur.Nom}"),
         };
 
         var token = new JwtSecurityToken(
-            issuer:   _settings.Issuer,
+            issuer: _settings.Issuer,
             audience: _settings.Audience,
-            claims:   claims,
-            expires:  DateTime.UtcNow.AddMinutes(_settings.AccessTokenDureeMinutes),
+            claims: claims,
+            expires: DateTime.UtcNow.AddMinutes(_settings.AccessTokenDureeMinutes),
             signingCredentials: credentials
         );
 
@@ -68,13 +68,13 @@ public class JwtService : IJwtService
             var principal = handler.ValidateToken(token, new TokenValidationParameters
             {
                 ValidateIssuerSigningKey = true,
-                IssuerSigningKey         = cle,
-                ValidateIssuer           = true,
-                ValidIssuer              = _settings.Issuer,
-                ValidateAudience         = true,
-                ValidAudience            = _settings.Audience,
-                ValidateLifetime         = false, // on valide nous-mêmes pour le refresh
-                ClockSkew                = TimeSpan.Zero,
+                IssuerSigningKey = cle,
+                ValidateIssuer = true,
+                ValidIssuer = _settings.Issuer,
+                ValidateAudience = true,
+                ValidAudience = _settings.Audience,
+                ValidateLifetime = false, // on valide nous-mêmes pour le refresh
+                ClockSkew = TimeSpan.Zero,
             }, out _);
 
             return principal;

@@ -3,6 +3,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
+#pragma warning disable CA1814 // Prefer jagged arrays over multidimensional
+
 namespace Finama.Infrastructure.Migrations
 {
     /// <inheritdoc />
@@ -12,17 +14,42 @@ namespace Finama.Infrastructure.Migrations
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.CreateTable(
+                name: "Pays",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    Nom = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
+                    CodeISO = table.Column<string>(type: "nvarchar(2)", maxLength: 2, nullable: false),
+                    DeviseCode = table.Column<string>(type: "nvarchar(3)", maxLength: 3, nullable: false),
+                    DeviseSymbole = table.Column<string>(type: "nvarchar(10)", maxLength: 10, nullable: false),
+                    TauxTVAStandard = table.Column<decimal>(type: "decimal(5,2)", nullable: false),
+                    CodeFiscal = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    Langue = table.Column<string>(type: "nvarchar(2)", maxLength: 2, nullable: false),
+                    EstActif = table.Column<bool>(type: "bit", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Pays", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "Tenants",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     Nom = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
                     SlugUnique = table.Column<string>(type: "nvarchar(450)", nullable: false),
-                    NINEA = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    NumeroFiscal = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     Adresse = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     Telephone = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     Email = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
+                    PaysId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     DeviseBase = table.Column<string>(type: "nvarchar(3)", maxLength: 3, nullable: false),
+                    TauxTVA = table.Column<decimal>(type: "decimal(5,2)", nullable: false),
+                    AssujettTVA = table.Column<bool>(type: "bit", nullable: false),
                     PlanComptableCode = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     Plan = table.Column<int>(type: "int", nullable: false),
                     AbonnementExpireAt = table.Column<DateTime>(type: "datetime2", nullable: true),
@@ -34,6 +61,33 @@ namespace Finama.Infrastructure.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Tenants", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_Tenants_Pays_PaysId",
+                        column: x => x.PaysId,
+                        principalTable: "Pays",
+                        principalColumn: "Id");
+                });
+
+            migrationBuilder.CreateTable(
+                name: "ClassesComptables",
+                columns: table => new
+                {
+                    Numero = table.Column<int>(type: "int", nullable: false),
+                    Libelle = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uniqueidentifier", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_ClassesComptables", x => x.Numero);
+                    table.ForeignKey(
+                        name: "FK_ClassesComptables_Tenants_TenantId",
+                        column: x => x.TenantId,
+                        principalTable: "Tenants",
+                        principalColumn: "Id");
                 });
 
             migrationBuilder.CreateTable(
@@ -317,6 +371,30 @@ namespace Finama.Infrastructure.Migrations
                         principalColumn: "Id");
                 });
 
+            migrationBuilder.InsertData(
+                table: "Pays",
+                columns: new[] { "Id", "CodeFiscal", "CodeISO", "CreatedAt", "DeviseCode", "DeviseSymbole", "EstActif", "IsDeleted", "Langue", "Nom", "TauxTVAStandard", "UpdatedAt" },
+                values: new object[,]
+                {
+                    { new Guid("10000000-0000-0000-0000-000000000001"), "NIF", "TG", new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "XOF", "FCFA", true, false, "fr", "Togo", 18m, null },
+                    { new Guid("10000000-0000-0000-0000-000000000002"), "NIF", "ST", new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "STD", "Db", true, false, "pt", "São Tomé et Príncipe", 15m, null },
+                    { new Guid("10000000-0000-0000-0000-000000000003"), "NINEA", "SN", new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "XOF", "FCFA", true, false, "fr", "Sénégal", 18m, null },
+                    { new Guid("10000000-0000-0000-0000-000000000004"), "DGI", "CI", new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "XOF", "FCFA", true, false, "fr", "Côte d'Ivoire", 18m, null },
+                    { new Guid("10000000-0000-0000-0000-000000000005"), "IFU", "BJ", new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "XOF", "FCFA", true, false, "fr", "Bénin", 18m, null },
+                    { new Guid("10000000-0000-0000-0000-000000000006"), "IFU", "BF", new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "XOF", "FCFA", true, false, "fr", "Burkina Faso", 18m, null },
+                    { new Guid("10000000-0000-0000-0000-000000000007"), "NIF", "ML", new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "XOF", "FCFA", true, false, "fr", "Mali", 18m, null },
+                    { new Guid("10000000-0000-0000-0000-000000000008"), "NIF", "NE", new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "XOF", "FCFA", true, false, "fr", "Niger", 19m, null },
+                    { new Guid("10000000-0000-0000-0000-000000000009"), "NIU", "CM", new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "XAF", "FCFA", true, false, "fr", "Cameroun", 19.25m, null },
+                    { new Guid("10000000-0000-0000-0000-000000000010"), "NIF", "GA", new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "XAF", "FCFA", true, false, "fr", "Gabon", 18m, null },
+                    { new Guid("10000000-0000-0000-0000-000000000011"), "NIU", "CG", new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "XAF", "FCFA", true, false, "fr", "Congo", 18m, null },
+                    { new Guid("10000000-0000-0000-0000-000000000012"), "NIF", "GN", new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "GNF", "FG", true, false, "fr", "Guinée", 18m, null }
+                });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ClassesComptables_TenantId",
+                table: "ClassesComptables",
+                column: "TenantId");
+
             migrationBuilder.CreateIndex(
                 name: "IX_CompteComptables_CompteParentId",
                 table: "CompteComptables",
@@ -401,6 +479,22 @@ namespace Finama.Infrastructure.Migrations
                 column: "TenantId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_Pays_CodeISO",
+                table: "Pays",
+                column: "CodeISO",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Pays_DeviseCode",
+                table: "Pays",
+                column: "DeviseCode");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Tenants_PaysId",
+                table: "Tenants",
+                column: "PaysId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_Tenants_SlugUnique",
                 table: "Tenants",
                 column: "SlugUnique",
@@ -427,6 +521,9 @@ namespace Finama.Infrastructure.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
+                name: "ClassesComptables");
+
+            migrationBuilder.DropTable(
                 name: "LignesEcriture");
 
             migrationBuilder.DropTable(
@@ -452,6 +549,9 @@ namespace Finama.Infrastructure.Migrations
 
             migrationBuilder.DropTable(
                 name: "Tenants");
+
+            migrationBuilder.DropTable(
+                name: "Pays");
         }
     }
 }

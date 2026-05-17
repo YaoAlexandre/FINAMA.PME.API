@@ -1,4 +1,3 @@
-using System.Security.Claims;
 using Finama.Infrastructure.Data;
 using Microsoft.AspNetCore.Http;
 

@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Finama.Infrastructure.Data.Configurations;
 
+// 🌟 Nouvelle configuration pour le tenant, avec sécurité renforcée et relations optimisées
 public class TenantConfiguration : IEntityTypeConfiguration<Tenant>
 {
     public void Configure(EntityTypeBuilder<Tenant> b)
@@ -13,10 +14,18 @@ public class TenantConfiguration : IEntityTypeConfiguration<Tenant>
         b.Property(e => e.Nom).HasMaxLength(200).IsRequired();
         b.Property(e => e.Email).HasMaxLength(200).IsRequired();
         b.Property(e => e.DeviseBase).HasMaxLength(3).IsRequired();
+        b.Property(e => e.TauxTVA).HasColumnType("decimal(5,2)");
         b.Property(e => e.Plan).HasConversion<int>();
+
+        // Relation Tenant → PaysConfig
+        b.HasOne(e => e.Pays)
+            .WithMany(p => p.Tenants)
+            .HasForeignKey(e => e.PaysId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }
 
+// 🌟 Nouvelle configuration pour l'utilisateur, avec sécurité renforcée et relations optimisées
 public class UtilisateurConfiguration : IEntityTypeConfiguration<Utilisateur>
 {
     public void Configure(EntityTypeBuilder<Utilisateur> b)
@@ -35,6 +44,7 @@ public class UtilisateurConfiguration : IEntityTypeConfiguration<Utilisateur>
     }
 }
 
+// 🌟 Nouvelle configuration pour le compte comptable, avec précision financière renforcée et relations optimisées
 public class CompteComptableConfiguration : IEntityTypeConfiguration<CompteComptable>
 {
     public void Configure(EntityTypeBuilder<CompteComptable> b)
@@ -56,6 +66,7 @@ public class CompteComptableConfiguration : IEntityTypeConfiguration<CompteCompt
     }
 }
 
+// 🌟 Nouvelle configuration pour l'écriture comptable, avec précision financière renforcée et relations optimisées
 public class EcritureComptableConfiguration : IEntityTypeConfiguration<EcritureComptable>
 {
     public void Configure(EntityTypeBuilder<EcritureComptable> b)
@@ -83,6 +94,7 @@ public class EcritureComptableConfiguration : IEntityTypeConfiguration<EcritureC
     }
 }
 
+// 🌟 Nouvelle configuration pour la ligne d'écriture, avec précision financière renforcée et relations optimisées
 public class LigneEcritureConfiguration : IEntityTypeConfiguration<LigneEcriture>
 {
     public void Configure(EntityTypeBuilder<LigneEcriture> b)
@@ -104,6 +116,7 @@ public class LigneEcritureConfiguration : IEntityTypeConfiguration<LigneEcriture
     }
 }
 
+// 🌟 Nouvelle configuration pour la facture, avec précision financière renforcée et relations optimisées
 public class FactureConfiguration : IEntityTypeConfiguration<Facture>
 {
     public void Configure(EntityTypeBuilder<Facture> b)
@@ -129,6 +142,7 @@ public class FactureConfiguration : IEntityTypeConfiguration<Facture>
     }
 }
 
+// 🌟 Nouvelle configuration pour la ligne de facture, avec calculs intégrés et précision financière renforcée
 public class LigneFactureConfiguration : IEntityTypeConfiguration<LigneFacture>
 {
     public void Configure(EntityTypeBuilder<LigneFacture> b)
@@ -145,5 +159,52 @@ public class LigneFactureConfiguration : IEntityTypeConfiguration<LigneFacture>
             .HasForeignKey(e => e.FactureId)
             .OnDelete(DeleteBehavior.Restrict);
 
+    }
+}
+
+
+// 🌟 Nouvelle entité pour gérer les classes comptables de manière centralisée
+public class ClasseComptableConfiguration : IEntityTypeConfiguration<ClasseComptable>
+{
+    public void Configure(EntityTypeBuilder<ClasseComptable> builder)
+    {
+        builder.ToTable("ClassesComptables");
+        builder.HasKey(c => new { c.TenantId, c.Numero });
+        builder.Property(c => c.Numero)
+   .ValueGeneratedNever();
+
+        builder.Property(c => c.Libelle)
+            .IsRequired()
+            .HasMaxLength(100);
+    }
+}
+
+// 🌟 Nouvelle entité pour gérer les devises de manière centralisée
+public class DeviseConfiguration : IEntityTypeConfiguration<Devise>
+{
+    public void Configure(EntityTypeBuilder<Devise> b)
+    {
+        // 1. Structure de la table
+        b.ToTable("Devises");
+        b.HasKey(e => e.Id);
+        b.HasIndex(e => e.Code).IsUnique();
+        b.Property(e => e.Code).HasMaxLength(3).IsRequired();
+        b.Property(e => e.Symbole).HasMaxLength(10).IsRequired();
+        b.Property(e => e.Libelle).HasMaxLength(100).IsRequired();
+        b.Property(e => e.TauxBaseDollar).HasColumnType("decimal(18,4)").IsRequired();
+        b.Property(e => e.DateMiseAJour).IsRequired();
+        b.Property(e => e.EstActive).HasDefaultValue(true);
+
+        // 2. 🌟 Seed directement intégré ici !
+        var dateSeeding = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+
+        // 2. Utilisez une chaîne brute ISO que SQL Server et EF Core liront comme une constante statique
+        b.HasData(
+            new Devise { Id = Guid.Parse("11111111-1111-1111-1111-111111111111"), Code = "USD", Symbole = "$", Libelle = "Dollar américain", TauxBaseDollar = 1.0000m, DateMiseAJour = DateTime.Parse("2026-01-01T00:00:00Z") },
+            new Devise { Id = Guid.Parse("22222222-2222-2222-2222-222222222222"), Code = "XOF", Symbole = "FCFA", Libelle = "Franc CFA (BCEAO)", TauxBaseDollar = 615.0000m, DateMiseAJour = DateTime.Parse("2026-01-01T00:00:00Z") },
+            new Devise { Id = Guid.Parse("33333333-3333-3333-3333-333333333333"), Code = "EUR", Symbole = "€", Libelle = "Euro", TauxBaseDollar = 0.9200m, DateMiseAJour = DateTime.Parse("2026-01-01T00:00:00Z") },
+            new Devise { Id = Guid.Parse("44444444-4444-4444-4444-444444444444"), Code = "GHS", Symbole = "₵", Libelle = "Cedi ghanéen", TauxBaseDollar = 14.5000m, DateMiseAJour = DateTime.Parse("2026-01-01T00:00:00Z") },
+            new Devise { Id = Guid.Parse("55555555-5555-5555-5555-555555555555"), Code = "NGN", Symbole = "₦", Libelle = "Naira nigérian", TauxBaseDollar = 1490.0000m, DateMiseAJour = DateTime.Parse("2026-01-01T00:00:00Z") }
+        );
     }
 }
