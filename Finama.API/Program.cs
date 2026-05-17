@@ -26,11 +26,37 @@ var allowedOrigins = builder.Configuration
     .Get<string[]>() ?? [];
 
 // ─── Base de données ──────────────────────────────────────────────────────────
+
+//builder.Services.AddDbContext<AppDbContext>(options =>
+//    options.UseSqlServer(
+//        builder.Configuration.GetConnectionString("Default"),
+//        sql => sql.MigrationsAssembly("Finama.Infrastructure")
+//    ));
+
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlServer(
-        builder.Configuration.GetConnectionString("Default"),
-        sql => sql.MigrationsAssembly("Finama.Infrastructure")
-    ));
+{
+    // On récupère la chaîne, et si elle est null, on met une chaîne vide temporaire
+    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ?? "";
+
+    // 🌟 Si on est sur Render ou qu'on force Postgres
+    if (connectionString.Contains("postgres://") || connectionString.Contains("Host="))
+    {
+        options.UseNpgsql(connectionString,
+            sql => sql.MigrationsAssembly("Finama.Infrastructure"));
+    }
+    // 🏠 Sinon, on utilise SQL Server (Local ou fallback)
+    else
+    {
+        // Si la chaîne est vide (pendant le design-time), on met une chaîne de secours pour éviter le crash
+        var sqlServerPath = string.IsNullOrEmpty(connectionString)
+            ? "Server=localhost;Database=Dummy;Trusted_Connection=True;"
+            : connectionString;
+
+        options.UseSqlServer(sqlServerPath,
+            sql => sql.MigrationsAssembly("Finama.Infrastructure"));
+    }
+});
+
 
 // ─── Multi-tenant ─────────────────────────────────────────────────────────────
 builder.Services.AddHttpContextAccessor();
@@ -178,6 +204,12 @@ if (app.Environment.IsDevelopment())
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     await db.Database.MigrateAsync();
+}
+
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    db.Database.Migrate(); // 🚀 C'est cette ligne qui fait le travail !
 }
 
 app.Run();
