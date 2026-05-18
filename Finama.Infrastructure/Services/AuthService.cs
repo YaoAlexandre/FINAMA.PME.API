@@ -30,24 +30,25 @@ public class AuthService : IAuthService
 
     public async Task<AuthResponse> LoginAsync(LoginRequest request)
     {
+        // 1. On force les DEUX côtés de l'égalité en minuscules (.ToLower())
         var utilisateur = await _db.Utilisateurs
             .IgnoreQueryFilters()
             .Include(u => u.Tenant)
                 .ThenInclude(t => t.Pays)
-            .FirstOrDefaultAsync(u => u.Email == request.Email.ToLower()
+            .FirstOrDefaultAsync(u => u.Email.ToLower() == request.Email.ToLower()
                                    && !u.IsDeleted
                                    && u.EstActif);
 
-        if (utilisateur is null || !BCrypt.Net.BCrypt.Verify(request.MotDePasse, utilisateur.MotDePasseHash))
+        // 2. On applique un .Trim() sur le hash par sécurité pour Postgres
+        if (utilisateur is null || !BCrypt.Net.BCrypt.Verify(request.MotDePasse, utilisateur.MotDePasseHash.Trim()))
             throw new UnauthorizedAccessException("Email ou mot de passe incorrect.");
 
         if (!utilisateur.Tenant.EstActif)
             throw new UnauthorizedAccessException("Ce compte entreprise est suspendu.");
 
-        // ─── AUTO-CORRECTION : Vérification et initialisation tardive (Lazy-Init) ───
+        // ─── AUTO-CORRECTION : Le reste de ton code est parfait et ne change pas ───
         var tenantId = utilisateur.TenantId;
 
-        // On utilise IgnoreQueryFilters pour chercher précisément les classes de CE tenant
         var aDesClasses = await _db.ClassesComptables
             .IgnoreQueryFilters()
             .AnyAsync(c => c.TenantId == tenantId);
@@ -66,10 +67,9 @@ public class AuthService : IAuthService
         };
 
             await _db.ClassesComptables.AddRangeAsync(classesParDefaut);
-            await _db.SaveChangesAsync(); // Sauvegarde immédiate avant d'émettre le token
+            await _db.SaveChangesAsync();
         }
 
-        // Émission classique des tokens d'accès
         return await EmettreTokensAsync(utilisateur, utilisateur.Tenant);
     }
 
