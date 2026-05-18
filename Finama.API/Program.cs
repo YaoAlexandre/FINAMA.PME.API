@@ -80,6 +80,7 @@ builder.Services.AddScoped<IClasseComptableService, ClasseComptableService>();
 builder.Services.AddScoped<ITenantInitializationService, TenantInitializationService>();
 builder.Services.AddScoped<IDeviseService, DeviseService>();
 builder.Services.AddScoped<IClotureService, ClotureService>();
+builder.Services.AddTransient<IEmailService, EmailService>();
 
 // ─── Validation FluentValidation ──────────────────────────────────────────────
 builder.Services.AddScoped<IValidator<CreerEcritureRequest>, CreerEcritureValidator>();

@@ -11,6 +11,9 @@ public class Utilisateur : TenantEntity
     public DateTime? DerniereConnexionAt { get; set; }
     public string? RefreshToken { get; set; }
     public DateTime? RefreshTokenExpireAt { get; set; }
+    public string? OtpCode { get; set; }
+    public DateTime? OtpExpireAt { get; set; }
+    public bool IsOtpValidated { get; set; }
 }
 
 public enum RoleUtilisateur

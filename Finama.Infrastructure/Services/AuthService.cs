@@ -11,6 +11,7 @@ public interface IAuthService
 {
     Task<AuthResponse> LoginAsync(LoginRequest request);
     Task<AuthResponse> RegisterTenantAsync(RegisterTenantRequest request);
+    Task<AuthResponse> VerifierOtpAsync(VerifyOtpRequest request);
     Task<AuthResponse> RefreshTokenAsync(RefreshTokenRequest request);
     Task LogoutAsync(Guid utilisateurId);
 }
@@ -20,12 +21,14 @@ public class AuthService : IAuthService
     private readonly AppDbContext _db;
     private readonly IJwtService _jwt;
     private readonly JwtSettings _settings;
+    private readonly IEmailService _emailService;
 
-    public AuthService(AppDbContext db, IJwtService jwt, IOptions<JwtSettings> options)
+    public AuthService(AppDbContext db, IJwtService jwt, IOptions<JwtSettings> options, IEmailService emailService)
     {
         _db = db;
         _jwt = jwt;
         _settings = options.Value;
+        _emailService = emailService;
     }
 
     public async Task<AuthResponse> LoginAsync(LoginRequest request)
@@ -35,22 +38,95 @@ public class AuthService : IAuthService
             .IgnoreQueryFilters()
             .FirstOrDefaultAsync(u => u.Email.ToLower() == request.Email.ToLower().Trim());
 
-        // Si l'utilisateur n'existe pas
+        // LOG 2 : Est-ce qu'on l'a trouvé en base PostgreSQL ?
         if (utilisateur is null)
+        {
+            Console.WriteLine($"[DIAGNOSTIC LOGIN] ÉCHEC : Aucun utilisateur trouvé pour l'email '{request.Email}'");
             throw new UnauthorizedAccessException("Email ou mot de passe incorrect.");
+        }
 
-        // 2. Nettoyage obligatoire du Hash pour BCrypt sous PostgreSQL
+        Console.WriteLine($"[DIAGNOSTIC LOGIN] Utilisateur trouvé ! Nom: {utilisateur.Nom}, EstActif: {utilisateur.EstActif}");
+        Console.WriteLine($"[DIAGNOSTIC LOGIN] Hash en base: '{utilisateur.MotDePasseHash}'");
+
+        // Nettoyage et vérification BCrypt
         string hashNettoye = utilisateur.MotDePasseHash.Trim();
+        bool estValide = BCrypt.Net.BCrypt.Verify(request.MotDePasse, hashNettoye);
 
-        //// Vérification du mot de passe avec le hash nettoyé
-        //if (!BCrypt.Net.BCrypt.Verify(request.MotDePasse, hashNettoye))
-        //    throw new UnauthorizedAccessException("Email ou mot de passe incorrect.");
+        // LOG 3 : Est-ce que BCrypt valide le mot de passe ?
+        Console.WriteLine($"[DIAGNOSTIC LOGIN] Résultat de la vérification BCrypt: {estValide}");
+
+        if (!estValide)
+            throw new UnauthorizedAccessException("Email ou mot de passe incorrect.");
 
         // 3. Vérification des statuts du compte après validation du mot de passe
         if (utilisateur.IsDeleted || !utilisateur.EstActif)
             throw new UnauthorizedAccessException("Ce compte utilisateur est désactivé ou supprimé.");
 
-        // 4. Chargement explicite du Tenant et du Pays pour éviter les jointures vides
+        // ─── 🛡️ ÉTAPE OTP COUPLÉE ICI (Le mot de passe est valide) ───
+
+        var random = new Random();
+        string codeOtp = random.Next(100000, 999999).ToString();
+
+        // Enregistrement de l'OTP en base (Valable 10 minutes)
+        utilisateur.OtpCode = codeOtp;
+        utilisateur.OtpExpireAt = DateTime.UtcNow.AddMinutes(10);
+        utilisateur.IsOtpValidated = false;
+
+        _db.Utilisateurs.Update(utilisateur);
+        await _db.SaveChangesAsync();
+
+        // 📧 ICI : Appel de ton service d'envoi d'email
+        // await _emailService.SendOtpEmailAsync(utilisateur.Email, codeOtp);
+        Console.WriteLine($"[OTP DEBUG] Code généré pour {utilisateur.Email} : {codeOtp}");
+
+        // 📧 Envoi réel du mail de validation
+        await _emailService.SendOtpEmailAsync(utilisateur.Email, codeOtp);
+
+        // On retourne une réponse qui bloque l'accès aux tokens tant que l'OTP n'est pas fourni
+        return new AuthResponse(
+        AccessToken: string.Empty,
+        RefreshToken: string.Empty,
+        ExpireAt: DateTime.UtcNow,
+        NomUtilisateur: $"{utilisateur.Prenom} {utilisateur.Nom}",
+        Email: utilisateur.Email,
+        Role: utilisateur.Role.ToString(),
+        TenantId: Guid.Empty,
+        NomEntreprise: string.Empty,
+        Pays: string.Empty,
+        Devise: string.Empty,
+        DeviseSymbole: string.Empty,
+        TauxTVA: 0,
+        RequiresOtp: true,
+        Message: "Un code de vérification a été envoyé sur votre boîte mail."
+    );
+    }
+
+    public async Task<AuthResponse> VerifierOtpAsync(VerifyOtpRequest request)
+    {
+        // 1. Recherche brute de l'utilisateur pour valider son OTP
+        var utilisateur = await _db.Utilisateurs
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(u => u.Email.ToLower() == request.Email.ToLower().Trim());
+
+        if (utilisateur is null)
+            throw new UnauthorizedAccessException("Demande invalide.");
+
+        // 2. Contrôles de sécurité sur l'OTP
+        if (string.IsNullOrEmpty(utilisateur.OtpCode) || utilisateur.OtpCode != request.CodeOtp)
+            throw new UnauthorizedAccessException("Code OTP incorrect.");
+
+        if (utilisateur.OtpExpireAt < DateTime.UtcNow)
+            throw new UnauthorizedAccessException("Le code OTP a expiré. Veuillez en générer un nouveau.");
+
+        // 3. OTP Valide ! On réinitialise les champs de sécurité
+        utilisateur.OtpCode = null;
+        utilisateur.OtpExpireAt = null;
+        utilisateur.IsOtpValidated = true;
+
+        _db.Utilisateurs.Update(utilisateur);
+        await _db.SaveChangesAsync();
+
+        // 4. Chargement explicite du Tenant et du Pays pour éviter les jointures vides sous Postgres
         await _db.Entry(utilisateur).Reference(u => u.Tenant).LoadAsync();
 
         if (utilisateur.Tenant is null)
@@ -61,7 +137,7 @@ public class AuthService : IAuthService
         if (!utilisateur.Tenant.EstActif)
             throw new UnauthorizedAccessException("Ce compte entreprise est suspendu.");
 
-        // 5. Initialisation tardive (Lazy-Init) de ton plan comptable (Ton code d'origine qui est parfait)
+        // 5. Initialisation tardive (Lazy-Init) de ton plan comptable SYSCOHADA
         var tenantId = utilisateur.TenantId;
         var aDesClasses = await _db.ClassesComptables
             .IgnoreQueryFilters()
@@ -84,7 +160,7 @@ public class AuthService : IAuthService
             await _db.SaveChangesAsync();
         }
 
-        // 6. Émission des jetons d'authentification
+        // 6. Émission finale des jetons d'authentification (Connexion réussie)
         return await EmettreTokensAsync(utilisateur, utilisateur.Tenant);
     }
 
@@ -307,7 +383,9 @@ public class AuthService : IAuthService
             Pays: tenant.Pays.Nom,
             Devise: tenant.DeviseBase,
             DeviseSymbole: tenant.Pays.DeviseSymbole,
-            TauxTVA: tenant.TauxTVA
+            TauxTVA: tenant.TauxTVA,
+            RequiresOtp: false,
+            Message: null
         );
     }
 
