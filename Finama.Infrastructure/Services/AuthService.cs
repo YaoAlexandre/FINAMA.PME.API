@@ -30,25 +30,39 @@ public class AuthService : IAuthService
 
     public async Task<AuthResponse> LoginAsync(LoginRequest request)
     {
-        // 1. On force les DEUX côtés de l'égalité en minuscules (.ToLower())
+        // 1. Recherche brute sans aucun filtre pour être sûr de trouver l'adresse email
         var utilisateur = await _db.Utilisateurs
             .IgnoreQueryFilters()
-            .Include(u => u.Tenant)
-                .ThenInclude(t => t.Pays)
-            .FirstOrDefaultAsync(u => u.Email.ToLower() == request.Email.ToLower()
-                                   && !u.IsDeleted
-                                   && u.EstActif);
+            .FirstOrDefaultAsync(u => u.Email.ToLower() == request.Email.ToLower().Trim());
 
-        // 2. On applique un .Trim() sur le hash par sécurité pour Postgres
-        if (utilisateur is null || !BCrypt.Net.BCrypt.Verify(request.MotDePasse, utilisateur.MotDePasseHash))
+        // Si l'utilisateur n'existe pas
+        if (utilisateur is null)
             throw new UnauthorizedAccessException("Email ou mot de passe incorrect.");
+
+        // 2. Nettoyage obligatoire du Hash pour BCrypt sous PostgreSQL
+        string hashNettoye = utilisateur.MotDePasseHash.Trim();
+
+        // Vérification du mot de passe avec le hash nettoyé
+        if (!BCrypt.Net.BCrypt.Verify(request.MotDePasse, hashNettoye))
+            throw new UnauthorizedAccessException("Email ou mot de passe incorrect.");
+
+        // 3. Vérification des statuts du compte après validation du mot de passe
+        if (utilisateur.IsDeleted || !utilisateur.EstActif)
+            throw new UnauthorizedAccessException("Ce compte utilisateur est désactivé ou supprimé.");
+
+        // 4. Chargement explicite du Tenant et du Pays pour éviter les jointures vides
+        await _db.Entry(utilisateur).Reference(u => u.Tenant).LoadAsync();
+
+        if (utilisateur.Tenant is null)
+            throw new UnauthorizedAccessException("Erreur : Aucun compte entreprise associé.");
+
+        await _db.Entry(utilisateur.Tenant).Reference(t => t.Pays).LoadAsync();
 
         if (!utilisateur.Tenant.EstActif)
             throw new UnauthorizedAccessException("Ce compte entreprise est suspendu.");
 
-        // ─── AUTO-CORRECTION : Le reste de ton code est parfait et ne change pas ───
+        // 5. Initialisation tardive (Lazy-Init) de ton plan comptable (Ton code d'origine qui est parfait)
         var tenantId = utilisateur.TenantId;
-
         var aDesClasses = await _db.ClassesComptables
             .IgnoreQueryFilters()
             .AnyAsync(c => c.TenantId == tenantId);
@@ -70,6 +84,7 @@ public class AuthService : IAuthService
             await _db.SaveChangesAsync();
         }
 
+        // 6. Émission des jetons d'authentification
         return await EmettreTokensAsync(utilisateur, utilisateur.Tenant);
     }
 
