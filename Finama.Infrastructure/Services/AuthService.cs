@@ -40,7 +40,7 @@ public class AuthService : IAuthService
                                    && u.EstActif);
 
         // 2. On applique un .Trim() sur le hash par sécurité pour Postgres
-        if (utilisateur is null || !BCrypt.Net.BCrypt.Verify(request.MotDePasse, utilisateur.MotDePasseHash.Trim()))
+        if (utilisateur is null || !BCrypt.Net.BCrypt.Verify(request.MotDePasse, utilisateur.MotDePasseHash))
             throw new UnauthorizedAccessException("Email ou mot de passe incorrect.");
 
         if (!utilisateur.Tenant.EstActif)
