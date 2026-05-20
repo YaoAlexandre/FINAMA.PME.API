@@ -9,11 +9,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
-namespace Finama.Infrastructure.Migrations.Postgres
+namespace Finama.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260518085145_AddOtpColumns")]
-    partial class AddOtpColumns
+    [Migration("20260520095646_AddUserOTP")]
+    partial class AddUserOTP
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -162,7 +162,7 @@ namespace Finama.Infrastructure.Migrations.Postgres
                         {
                             Id = new Guid("11111111-1111-1111-1111-111111111111"),
                             Code = "USD",
-                            CreatedAt = new DateTime(2026, 5, 18, 8, 51, 44, 983, DateTimeKind.Utc).AddTicks(4027),
+                            CreatedAt = new DateTime(2026, 5, 20, 9, 56, 45, 40, DateTimeKind.Utc).AddTicks(8856),
                             DateMiseAJour = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local),
                             EstActive = true,
                             IsDeleted = false,
@@ -174,7 +174,7 @@ namespace Finama.Infrastructure.Migrations.Postgres
                         {
                             Id = new Guid("22222222-2222-2222-2222-222222222222"),
                             Code = "XOF",
-                            CreatedAt = new DateTime(2026, 5, 18, 8, 51, 44, 991, DateTimeKind.Utc).AddTicks(5697),
+                            CreatedAt = new DateTime(2026, 5, 20, 9, 56, 45, 56, DateTimeKind.Utc).AddTicks(8387),
                             DateMiseAJour = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local),
                             EstActive = true,
                             IsDeleted = false,
@@ -186,7 +186,7 @@ namespace Finama.Infrastructure.Migrations.Postgres
                         {
                             Id = new Guid("33333333-3333-3333-3333-333333333333"),
                             Code = "EUR",
-                            CreatedAt = new DateTime(2026, 5, 18, 8, 51, 44, 991, DateTimeKind.Utc).AddTicks(5815),
+                            CreatedAt = new DateTime(2026, 5, 20, 9, 56, 45, 56, DateTimeKind.Utc).AddTicks(8629),
                             DateMiseAJour = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local),
                             EstActive = true,
                             IsDeleted = false,
@@ -198,7 +198,7 @@ namespace Finama.Infrastructure.Migrations.Postgres
                         {
                             Id = new Guid("44444444-4444-4444-4444-444444444444"),
                             Code = "GHS",
-                            CreatedAt = new DateTime(2026, 5, 18, 8, 51, 44, 991, DateTimeKind.Utc).AddTicks(5828),
+                            CreatedAt = new DateTime(2026, 5, 20, 9, 56, 45, 56, DateTimeKind.Utc).AddTicks(8663),
                             DateMiseAJour = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local),
                             EstActive = true,
                             IsDeleted = false,
@@ -210,7 +210,7 @@ namespace Finama.Infrastructure.Migrations.Postgres
                         {
                             Id = new Guid("55555555-5555-5555-5555-555555555555"),
                             Code = "NGN",
-                            CreatedAt = new DateTime(2026, 5, 18, 8, 51, 44, 991, DateTimeKind.Utc).AddTicks(5846),
+                            CreatedAt = new DateTime(2026, 5, 20, 9, 56, 45, 56, DateTimeKind.Utc).AddTicks(8676),
                             DateMiseAJour = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local),
                             EstActive = true,
                             IsDeleted = false,

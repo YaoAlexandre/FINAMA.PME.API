@@ -210,10 +210,67 @@ if (app.Environment.IsDevelopment())
     await db.Database.MigrateAsync();
 }
 
+//using (var scope = app.Services.CreateScope())
+//{
+//    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+//    db.Database.Migrate(); // 🚀 C'est cette ligne qui fait le travail !
+//}
+
 using (var scope = app.Services.CreateScope())
 {
-    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    db.Database.Migrate(); // 🚀 C'est cette ligne qui fait le travail !
+    var services = scope.ServiceProvider;
+    var db = services.GetRequiredService<AppDbContext>();
+
+    try
+    {
+        Console.WriteLine("[DEPLOIEMENT] Analyse de la structure de la base de données...");
+
+        // 1. On utilise une connexion ADO.NET standard pour lire la réponse (0 ou 1) de Postgres
+        using var command = db.Database.GetDbConnection().CreateCommand();
+        command.CommandText = "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'Utilisateurs');";
+
+        // On s'assure que la connexion est ouverte
+        if (db.Database.GetDbConnection().State != System.Data.ConnectionState.Open)
+            await db.Database.GetDbConnection().OpenAsync();
+
+        // On récupère le résultat sous forme de booléen
+        bool tableExiste = (bool)(await command.ExecuteScalarAsync() ?? false);
+
+        if (tableExiste)
+        {
+            // 2. Même logique pour vérifier si la colonne OTP existe
+            command.CommandText = "SELECT EXISTS (SELECT FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'Utilisateurs' AND column_name = 'otp_code');"; // Attention : Postgres passe souvent les noms en minuscules 'otp_code'
+            bool colonneOtpExiste = (bool)(await command.ExecuteScalarAsync() ?? false);
+
+            // Cas A : La table existe mais PAS la colonne OTP -> Ancienne base détectée
+            if (!colonneOtpExiste)
+            {
+                Console.WriteLine("[DEPLOIEMENT] Ancienne structure détectée. Alignement de l'historique EF Core...");
+
+                command.CommandText = "CREATE TABLE IF NOT EXISTS \"__EFMigrationsHistory\" (\"MigrationId\" varchar(150) NOT NULL CONSTRAINT \"PK___EFMigrationsHistory\" PRIMARY KEY, \"ProductVersion\" varchar(32) NOT NULL);";
+                await command.ExecuteNonQueryAsync();
+
+                // Remplace '20260517232310_Inot' par le nom exact de ton fichier de migration initiale
+                command.CommandText = "INSERT INTO \"__EFMigrationsHistory\" (\"MigrationId\", \"ProductVersion\") VALUES ('20260517232310_Inot', '8.0.0') ON CONFLICT DO NOTHING;";
+                await command.ExecuteNonQueryAsync();
+            }
+            else
+            {
+                Console.WriteLine("[DEPLOIEMENT] Structure à jour détectée.");
+            }
+        }
+
+        // 3. On ferme proprement la connexion manuelle avant de laisser EF Core migrer
+        await db.Database.GetDbConnection().CloseAsync();
+
+        // 4. On applique les migrations restantes (comme l'ajout des colonnes OTP)
+        await db.Database.MigrateAsync();
+        Console.WriteLine("[DEPLOIEMENT] Base de données synchronisée avec succès !");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[DEPLOIEMENT CRASH] Erreur critique : {ex.Message}");
+    }
 }
 
 app.Run();
