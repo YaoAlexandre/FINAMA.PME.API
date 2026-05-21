@@ -28,6 +28,7 @@ public class AppDbContext : DbContext
 
     public DbSet<ClasseComptable> ClassesComptables { get; set; }
     public DbSet<Devise> Devises { get; set; }
+    public DbSet<AppareilConfiance> AppareilsConfiance { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

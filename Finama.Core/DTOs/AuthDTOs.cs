@@ -26,10 +26,14 @@ public record AuthResponse(
     string Pays,
     string Devise,
     string DeviseSymbole,
-    decimal TauxTVA
+    decimal TauxTVA,
+    bool RequiresOtp,
+    string? Message
 );
 
 public record RefreshTokenRequest(
     string AccessToken,
     string RefreshToken
 );
+
+public record VerifyOtpRequest(string Email, string CodeOtp);
