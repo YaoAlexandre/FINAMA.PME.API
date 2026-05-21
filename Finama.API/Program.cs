@@ -107,19 +107,54 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 
 // ─── Autorisation par rôles ───────────────────────────────────────────────────
+//builder.Services.AddAuthorization(options =>
+//{
+//    options.AddPolicy("AdminTenant", p =>
+//        p.RequireClaim("role", nameof(RoleUtilisateur.AdminTenant),
+//                               nameof(RoleUtilisateur.SuperAdmin)));
+
+//    options.AddPolicy("Comptable", p =>
+//        p.RequireClaim("role", nameof(RoleUtilisateur.AdminTenant),
+//                               nameof(RoleUtilisateur.Comptable),
+//                               nameof(RoleUtilisateur.SuperAdmin)));
+
+//    options.AddPolicy("SuperAdmin", p =>
+//        p.RequireClaim("role", nameof(RoleUtilisateur.SuperAdmin)));
+//});
+
 builder.Services.AddAuthorization(options =>
 {
+    // 1. Qui peut administrer le compte (inviter des gens, changer l'abonnement) ?
     options.AddPolicy("AdminTenant", p =>
         p.RequireClaim("role", nameof(RoleUtilisateur.AdminTenant),
                                nameof(RoleUtilisateur.SuperAdmin)));
 
+    // 2. Qui peut valider les écritures définitives et éditer le SYSCOHADA ?
     options.AddPolicy("Comptable", p =>
         p.RequireClaim("role", nameof(RoleUtilisateur.AdminTenant),
                                nameof(RoleUtilisateur.Comptable),
                                nameof(RoleUtilisateur.SuperAdmin)));
 
-    options.AddPolicy("SuperAdmin", p =>
-        p.RequireClaim("role", nameof(RoleUtilisateur.SuperAdmin)));
+    // 3. Qui peut faire de la saisie (les comptables + les assistants/collaborateurs) ?
+    options.AddPolicy("Saisie", p =>
+        p.RequireClaim("role", nameof(RoleUtilisateur.AdminTenant),
+                               nameof(RoleUtilisateur.Comptable),
+                               nameof(RoleUtilisateur.Collaborateur),
+                               nameof(RoleUtilisateur.SuperAdmin)));
+
+    // 4. Qui peut juste consulter ? Tout le monde a ce droit, y compris le profil "Lecture"
+    options.AddPolicy("LectureSeule", p =>
+        p.RequireClaim("role", nameof(RoleUtilisateur.AdminTenant),
+                               nameof(RoleUtilisateur.Comptable),
+                               nameof(RoleUtilisateur.Collaborateur),
+                               nameof(RoleUtilisateur.Lecture),
+                               nameof(RoleUtilisateur.Commercial),
+                               nameof(RoleUtilisateur.SuperAdmin)));
+
+    options.AddPolicy("Commercial", p =>
+    p.RequireClaim("role", nameof(RoleUtilisateur.Commercial),
+                           nameof(RoleUtilisateur.AdminTenant),
+                           nameof(RoleUtilisateur.SuperAdmin)));
 });
 
 // ─── CORS Dynamique pour Tunnels ngrok et Dev Local ───────────────────────────
@@ -203,12 +238,12 @@ app.UseAuthorization();  // puis les policies
 app.MapControllers();
 
 // ─── Migration automatique au démarrage (dev seulement) ───────────────────────
-if (app.Environment.IsDevelopment())
-{
-    using var scope = app.Services.CreateScope();
-    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    await db.Database.MigrateAsync();
-}
+//if (app.Environment.IsDevelopment())
+//{
+//    using var scope = app.Services.CreateScope();
+//    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+//    await db.Database.MigrateAsync();
+//}
 
 //using (var scope = app.Services.CreateScope())
 //{

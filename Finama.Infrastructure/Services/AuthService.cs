@@ -2,6 +2,7 @@ using Finama.Core.DTOs;
 using Finama.Core.Entities;
 using Finama.Infrastructure.Data;
 using Finama.Infrastructure.Seeds;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -22,21 +23,30 @@ public class AuthService : IAuthService
     private readonly IJwtService _jwt;
     private readonly JwtSettings _settings;
     private readonly IEmailService _emailService;
+    private readonly IHttpContextAccessor _httpContext;
 
-    public AuthService(AppDbContext db, IJwtService jwt, IOptions<JwtSettings> options, IEmailService emailService)
+    public AuthService(AppDbContext db, IJwtService jwt, IOptions<JwtSettings> options, IEmailService emailService, IHttpContextAccessor httpContext)
     {
         _db = db;
         _jwt = jwt;
         _settings = options.Value;
         _emailService = emailService;
+        _httpContext = httpContext; 
     }
 
     public async Task<AuthResponse> LoginAsync(LoginRequest request)
     {
         // 1. Recherche brute sans aucun filtre pour être sûr de trouver l'adresse email
+        //var utilisateur = await _db.Utilisateurs
+        //    .IgnoreQueryFilters()
+        //    .FirstOrDefaultAsync(u => u.Email.ToLower() == request.Email.ToLower().Trim());
         var utilisateur = await _db.Utilisateurs
             .IgnoreQueryFilters()
-            .FirstOrDefaultAsync(u => u.Email.ToLower() == request.Email.ToLower().Trim());
+            .Include(u => u.Tenant)
+                .ThenInclude(t => t.Pays)
+            .FirstOrDefaultAsync(u => u.Email == request.Email.ToLower()
+                                   && !u.IsDeleted
+                                   && u.EstActif);
 
         // LOG 2 : Est-ce qu'on l'a trouvé en base PostgreSQL ?
         if (utilisateur is null)
@@ -61,6 +71,27 @@ public class AuthService : IAuthService
         // 3. Vérification des statuts du compte après validation du mot de passe
         if (utilisateur.IsDeleted || !utilisateur.EstActif)
             throw new UnauthorizedAccessException("Ce compte utilisateur est désactivé ou supprimé.");
+
+        if (utilisateur.OtpExpireAt > DateTime.UtcNow.AddMinutes(8)) // Si le code précédent est encore valide depuis moins de 2 min
+        {
+            throw new InvalidOperationException("Veuillez patienter avant de demander un nouveau code.");
+        }
+
+        // 🛡️ Récupération sécurisée du DeviceId
+        var deviceId = _httpContext.HttpContext?.Request.Headers["X-Device-Id"].ToString();
+
+        if (!string.IsNullOrEmpty(deviceId))
+        {
+            var estDejaValide = await _db.AppareilsConfiance
+                .AnyAsync(a => a.UtilisateurId == utilisateur.Id
+                            && a.DeviceId == deviceId.ToString()
+                            && a.DateDerniereValidation > DateTime.UtcNow.AddDays(-30));
+
+            if (estDejaValide)
+            {
+                return await EmettreTokensAsync(utilisateur, utilisateur.Tenant);
+            }
+        }
 
         // ─── 🛡️ ÉTAPE OTP COUPLÉE ICI (Le mot de passe est valide) ───
 
@@ -108,6 +139,15 @@ public class AuthService : IAuthService
             .IgnoreQueryFilters()
             .FirstOrDefaultAsync(u => u.Email.ToLower() == request.Email.ToLower().Trim());
 
+        var utilisateurComplet = await _db.Utilisateurs
+            .IgnoreQueryFilters()
+            .Include(u => u.Tenant)
+                .ThenInclude(t => t.Pays)
+            .FirstOrDefaultAsync(u => u.Id == utilisateur.Id);
+
+        if (utilisateurComplet?.Tenant is null || !utilisateurComplet.Tenant.EstActif)
+            throw new UnauthorizedAccessException("Accès refusé : Entreprise suspendue.");
+
         if (utilisateur is null)
             throw new UnauthorizedAccessException("Demande invalide.");
 
@@ -117,6 +157,22 @@ public class AuthService : IAuthService
 
         if (utilisateur.OtpExpireAt < DateTime.UtcNow)
             throw new UnauthorizedAccessException("Le code OTP a expiré. Veuillez en générer un nouveau.");
+
+        if (utilisateur is null || utilisateur.OtpCode != request.CodeOtp || utilisateur.OtpExpireAt < DateTime.UtcNow)
+            throw new UnauthorizedAccessException("Code invalide ou expiré.");
+
+        // 💾 ENREGISTREMENT DE LA CONFIANCE ICI
+        var deviceId = _httpContext.HttpContext?.Request.Headers["X-Device-Id"].ToString();
+        if (!string.IsNullOrEmpty(deviceId))
+        {
+            var appareil = await _db.AppareilsConfiance
+                .FirstOrDefaultAsync(a => a.UtilisateurId == utilisateur.Id && a.DeviceId == deviceId);
+
+            if (appareil == null)
+                _db.AppareilsConfiance.Add(new AppareilConfiance { UtilisateurId = utilisateur.Id, DeviceId = deviceId, DateDerniereValidation = DateTime.UtcNow });
+            else
+                appareil.DateDerniereValidation = DateTime.UtcNow;
+        }
 
         // 3. OTP Valide ! On réinitialise les champs de sécurité
         utilisateur.OtpCode = null;

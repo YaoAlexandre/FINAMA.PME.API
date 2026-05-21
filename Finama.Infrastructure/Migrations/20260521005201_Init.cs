@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace Finama.Infrastructure.Migrations
 {
     /// <inheritdoc />
-    public partial class AddUserOTP : Migration
+    public partial class Init : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -235,6 +235,28 @@ namespace Finama.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "AppareilsConfiance",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    UtilisateurId = table.Column<Guid>(type: "uuid", nullable: false),
+                    DeviceId = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
+                    DateDerniereValidation = table.Column<DateTime>(type: "timestamp without time zone", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AppareilsConfiance", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_AppareilsConfiance_Utilisateurs_UtilisateurId",
+                        column: x => x.UtilisateurId,
+                        principalTable: "Utilisateurs",
+                        principalColumn: "Id");
+                });
+
+            migrationBuilder.CreateTable(
                 name: "Factures",
                 columns: table => new
                 {
@@ -399,11 +421,11 @@ namespace Finama.Infrastructure.Migrations
                 columns: new[] { "Id", "Code", "CreatedAt", "DateMiseAJour", "EstActive", "IsDeleted", "Libelle", "Symbole", "TauxBaseDollar", "UpdatedAt" },
                 values: new object[,]
                 {
-                    { new Guid("11111111-1111-1111-1111-111111111111"), "USD", new DateTime(2026, 5, 20, 9, 56, 45, 40, DateTimeKind.Utc).AddTicks(8856), new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local), true, false, "Dollar américain", "$", 1.0000m, null },
-                    { new Guid("22222222-2222-2222-2222-222222222222"), "XOF", new DateTime(2026, 5, 20, 9, 56, 45, 56, DateTimeKind.Utc).AddTicks(8387), new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local), true, false, "Franc CFA (BCEAO)", "FCFA", 615.0000m, null },
-                    { new Guid("33333333-3333-3333-3333-333333333333"), "EUR", new DateTime(2026, 5, 20, 9, 56, 45, 56, DateTimeKind.Utc).AddTicks(8629), new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local), true, false, "Euro", "€", 0.9200m, null },
-                    { new Guid("44444444-4444-4444-4444-444444444444"), "GHS", new DateTime(2026, 5, 20, 9, 56, 45, 56, DateTimeKind.Utc).AddTicks(8663), new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local), true, false, "Cedi ghanéen", "₵", 14.5000m, null },
-                    { new Guid("55555555-5555-5555-5555-555555555555"), "NGN", new DateTime(2026, 5, 20, 9, 56, 45, 56, DateTimeKind.Utc).AddTicks(8676), new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local), true, false, "Naira nigérian", "₦", 1490.0000m, null }
+                    { new Guid("11111111-1111-1111-1111-111111111111"), "USD", new DateTime(2026, 5, 21, 0, 52, 0, 313, DateTimeKind.Utc).AddTicks(2983), new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local), true, false, "Dollar américain", "$", 1.0000m, null },
+                    { new Guid("22222222-2222-2222-2222-222222222222"), "XOF", new DateTime(2026, 5, 21, 0, 52, 0, 323, DateTimeKind.Utc).AddTicks(6699), new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local), true, false, "Franc CFA (BCEAO)", "FCFA", 615.0000m, null },
+                    { new Guid("33333333-3333-3333-3333-333333333333"), "EUR", new DateTime(2026, 5, 21, 0, 52, 0, 323, DateTimeKind.Utc).AddTicks(6882), new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local), true, false, "Euro", "€", 0.9200m, null },
+                    { new Guid("44444444-4444-4444-4444-444444444444"), "GHS", new DateTime(2026, 5, 21, 0, 52, 0, 323, DateTimeKind.Utc).AddTicks(6904), new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local), true, false, "Cedi ghanéen", "₵", 14.5000m, null },
+                    { new Guid("55555555-5555-5555-5555-555555555555"), "NGN", new DateTime(2026, 5, 21, 0, 52, 0, 323, DateTimeKind.Utc).AddTicks(6913), new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local), true, false, "Naira nigérian", "₦", 1490.0000m, null }
                 });
 
             migrationBuilder.InsertData(
@@ -424,6 +446,12 @@ namespace Finama.Infrastructure.Migrations
                     { new Guid("10000000-0000-0000-0000-000000000011"), "NIU", "CG", new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "XAF", "FCFA", true, false, "fr", "Congo", 18m, null },
                     { new Guid("10000000-0000-0000-0000-000000000012"), "NIF", "GN", new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "GNF", "FG", true, false, "fr", "Guinée", 18m, null }
                 });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AppareilsConfiance_UtilisateurId_DeviceId",
+                table: "AppareilsConfiance",
+                columns: new[] { "UtilisateurId", "DeviceId" },
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_CompteComptables_CompteParentId",
@@ -556,6 +584,9 @@ namespace Finama.Infrastructure.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.DropTable(
+                name: "AppareilsConfiance");
+
             migrationBuilder.DropTable(
                 name: "ClassesComptables");
 
