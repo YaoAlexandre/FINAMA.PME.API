@@ -1,16 +1,17 @@
-using System.Text;
+using Finama.API.Middleware;
+using Finama.Core.DTOs;
+using Finama.Core.Entities;
+using Finama.Core.Validators;
+using Finama.Infrastructure.Data;
+using Finama.Infrastructure.Services;
+using Finama.Infrastructure.Services.Commercials;
 using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.IdentityModel.Tokens.Jwt;
-using Finama.Core.DTOs;
-using Finama.Core.Entities;
-using Finama.Core.Validators;
-using Finama.Infrastructure.Data;
-using Finama.Infrastructure.Services;
-using Finama.API.Middleware;
+using System.Text;
 
 // ⚠️ Désactive le remapping automatique des claims JWT par ASP.NET Core.
 // Sans ça, "sub" devient NameIdentifier et "role" devient un claim long URI.
@@ -84,6 +85,9 @@ builder.Services.AddTransient<IEmailService, EmailService>();
 
 // ─── Validation FluentValidation ──────────────────────────────────────────────
 builder.Services.AddScoped<IValidator<CreerEcritureRequest>, CreerEcritureValidator>();
+
+// ─── Commerciaux ──────────────────────────────────────────────
+builder.Services.AddScoped<IDevisService, DevisService>();
 
 // ─── Authentification JWT ─────────────────────────────────────────────────────
 var jwtSettings = builder.Configuration.GetSection("Jwt").Get<JwtSettings>()!;

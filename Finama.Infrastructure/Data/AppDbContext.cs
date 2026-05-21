@@ -30,6 +30,9 @@ public class AppDbContext : DbContext
     public DbSet<Devise> Devises { get; set; }
     public DbSet<AppareilConfiance> AppareilsConfiance { get; set; }
 
+    public DbSet<Devis> Devis => Set<Devis>();
+    public DbSet<LigneDevis> LignesDevis => Set<LigneDevis>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
