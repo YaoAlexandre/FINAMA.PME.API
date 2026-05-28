@@ -18,6 +18,8 @@ public interface IDevisService
     Task<DevisDto> MettreAJourStatutAsync(Guid id, MettreAJourStatutDevisRequest request, Guid userId);
     Task<Guid> ConvertirEnFactureAsync(Guid id, Guid userId);
     Task SupprimerAsync(Guid id, Guid userId);
+
+    Task<DevisDto> ModifierAsync(Guid id, CreerDevisRequest request, Guid userId);
 }
 
 public class DevisService : IDevisService
@@ -77,6 +79,37 @@ public class DevisService : IDevisService
         await _db.SaveChangesAsync();
 
         return await GetByIdAsync(devis.Id, userId);
+    }
+
+
+    // Dans DevisService
+    public async Task<DevisDto> ModifierAsync(Guid id, CreerDevisRequest request, Guid userId)
+    {
+        var devis = await _db.Devis
+            .Include(d => d.Lignes)
+            .FirstOrDefaultAsync(d => d.Id == id && d.CreePar == userId)
+            ?? throw new KeyNotFoundException("Devis introuvable.");
+
+        if (devis.Statut != StatutDevis.Brouillon)
+            throw new InvalidOperationException("Seul un brouillon peut être modifié.");
+
+        devis.Libelle = request.Libelle;
+        devis.TiersId = request.TiersId;
+        devis.DateExpiration = request.DateExpiration;
+        devis.Notes = request.Notes;
+
+        // Remplace les lignes existantes
+        _db.LignesDevis.RemoveRange(devis.Lignes);
+        devis.Lignes = request.Lignes.Select(l => new LigneDevis
+        {
+            Designation = l.Designation,
+            Quantite = l.Quantite,
+            PrixUnitaireHT = l.PrixUnitaireHT,
+            TauxTVA = l.TauxTVA
+        }).ToList();
+
+        await _db.SaveChangesAsync();
+        return await GetByIdAsync(id, userId);
     }
 
     public async Task<DevisDto> MettreAJourStatutAsync(Guid id, MettreAJourStatutDevisRequest request, Guid userId)

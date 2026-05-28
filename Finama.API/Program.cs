@@ -11,11 +11,12 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using System.Text;
 
 // ⚠️ Désactive le remapping automatique des claims JWT par ASP.NET Core.
 // Sans ça, "sub" devient NameIdentifier et "role" devient un claim long URI.
-JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
+//JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -106,7 +107,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidAudience = jwtSettings.Audience,
             ValidateLifetime = true,
             ClockSkew = TimeSpan.Zero,
-            //RoleClaimType = "role"
+            RoleClaimType = "role"
         };
     });
 
@@ -125,40 +126,40 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 //    options.AddPolicy("SuperAdmin", p =>
 //        p.RequireClaim("role", nameof(RoleUtilisateur.SuperAdmin)));
 //});
-
 builder.Services.AddAuthorization(options =>
 {
-    // 1. Qui peut administrer le compte (inviter des gens, changer l'abonnement) ?
     options.AddPolicy("AdminTenant", p =>
-        p.RequireClaim("role", nameof(RoleUtilisateur.AdminTenant),
-                               nameof(RoleUtilisateur.SuperAdmin)));
+        p.RequireClaim(ClaimTypes.Role,
+            nameof(RoleUtilisateur.AdminTenant),
+            nameof(RoleUtilisateur.SuperAdmin)));
 
-    // 2. Qui peut valider les écritures définitives et éditer le SYSCOHADA ?
     options.AddPolicy("Comptable", p =>
-        p.RequireClaim("role", nameof(RoleUtilisateur.AdminTenant),
-                               nameof(RoleUtilisateur.Comptable),
-                               nameof(RoleUtilisateur.SuperAdmin)));
+        p.RequireClaim(ClaimTypes.Role,
+            nameof(RoleUtilisateur.AdminTenant),
+            nameof(RoleUtilisateur.Comptable),
+            nameof(RoleUtilisateur.SuperAdmin)));
 
-    // 3. Qui peut faire de la saisie (les comptables + les assistants/collaborateurs) ?
     options.AddPolicy("Saisie", p =>
-        p.RequireClaim("role", nameof(RoleUtilisateur.AdminTenant),
-                               nameof(RoleUtilisateur.Comptable),
-                               nameof(RoleUtilisateur.Collaborateur),
-                               nameof(RoleUtilisateur.SuperAdmin)));
+        p.RequireClaim(ClaimTypes.Role,
+            nameof(RoleUtilisateur.AdminTenant),
+            nameof(RoleUtilisateur.Comptable),
+            nameof(RoleUtilisateur.Collaborateur),
+            nameof(RoleUtilisateur.SuperAdmin)));
 
-    // 4. Qui peut juste consulter ? Tout le monde a ce droit, y compris le profil "Lecture"
     options.AddPolicy("LectureSeule", p =>
-        p.RequireClaim("role", nameof(RoleUtilisateur.AdminTenant),
-                               nameof(RoleUtilisateur.Comptable),
-                               nameof(RoleUtilisateur.Collaborateur),
-                               nameof(RoleUtilisateur.Lecture),
-                               nameof(RoleUtilisateur.Commercial),
-                               nameof(RoleUtilisateur.SuperAdmin)));
+        p.RequireClaim(ClaimTypes.Role,
+            nameof(RoleUtilisateur.AdminTenant),
+            nameof(RoleUtilisateur.Comptable),
+            nameof(RoleUtilisateur.Collaborateur),
+            nameof(RoleUtilisateur.Lecture),
+            nameof(RoleUtilisateur.Commercial),
+            nameof(RoleUtilisateur.SuperAdmin)));
 
     options.AddPolicy("Commercial", p =>
-    p.RequireClaim("role", nameof(RoleUtilisateur.Commercial),
-                           nameof(RoleUtilisateur.AdminTenant),
-                           nameof(RoleUtilisateur.SuperAdmin)));
+        p.RequireClaim(ClaimTypes.Role,
+            nameof(RoleUtilisateur.Commercial),
+            nameof(RoleUtilisateur.AdminTenant),
+            nameof(RoleUtilisateur.SuperAdmin)));
 });
 
 // ─── CORS Dynamique pour Tunnels ngrok et Dev Local ───────────────────────────
