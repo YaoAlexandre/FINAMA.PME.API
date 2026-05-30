@@ -117,7 +117,7 @@ public class AuthService : IAuthService
         {
             try
             {
-                await _emailService.SendOtpEmailAsync(utilisateur.Email, codeOtp);
+                await _emailService.SendOtpEmailByMailKitAsync(utilisateur.Email, codeOtp);
             }
             catch (Exception ex)
             {
