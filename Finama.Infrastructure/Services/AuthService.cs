@@ -111,7 +111,19 @@ public class AuthService : IAuthService
         Console.WriteLine($"[OTP DEBUG] Code généré pour {utilisateur.Email} : {codeOtp}");
 
         // 📧 Envoi réel du mail de validation
-        await _emailService.SendOtpEmailAsync(utilisateur.Email, codeOtp);
+        // 📧 Envoi asynchrone en tâche de fond (Fire-and-Forget)
+        // La requête HTTP se termine immédiatement et l'utilisateur reçoit instantanément son UI de validation
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await _emailService.SendOtpEmailAsync(utilisateur.Email, codeOtp);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[CRITICAL OTP EMAIL ERROR] Impossible d'envoyer le mail à {utilisateur.Email}. Erreur : {ex.Message}");
+            }
+        });
 
         // On retourne une réponse qui bloque l'accès aux tokens tant que l'OTP n'est pas fourni
         return new AuthResponse(
