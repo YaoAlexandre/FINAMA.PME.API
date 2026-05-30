@@ -27,7 +27,7 @@ public class EcrituresController : ControllerBase
     /// Crée une nouvelle écriture comptable en brouillon.
     /// </summary>
     [HttpPost]
-    [Authorize(Roles = "Comptable")] // Réactivé pour aligner la sécurité de saisie
+    [Authorize(Roles = "Comptable, AdmintTenant")] // Réactivé pour aligner la sécurité de saisie
     public async Task<IActionResult> Creer([FromBody] CreerEcritureRequest request)
     {
         var validation = await _validator.ValidateAsync(request);
