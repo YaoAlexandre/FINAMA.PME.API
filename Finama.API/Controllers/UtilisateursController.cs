@@ -29,7 +29,7 @@ public class UtilisateursController : ControllerBase
         var existe = await _db.Utilisateurs.IgnoreQueryFilters()
             .AnyAsync(u => u.Email == model.Email.ToLower());
 
-        if (existe) return BadRequest("Cette adresse email est déjà associée à un compte.");
+        if (existe) return BadRequest(new { message = "Cette adresse email est déjà associée à un compte." });
 
         // 2. Créer l'entité
         var nouvelUtilisateur = new Utilisateur
@@ -48,7 +48,7 @@ public class UtilisateursController : ControllerBase
         _db.Utilisateurs.Add(nouvelUtilisateur);
         await _db.SaveChangesAsync();
 
-        return Ok();
+        return Ok(new { message = "Créé avec succès" });
     }
 
     [HttpGet]

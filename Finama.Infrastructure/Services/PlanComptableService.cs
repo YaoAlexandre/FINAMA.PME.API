@@ -13,23 +13,31 @@ public interface IPlanComptableService
     Task<CompteComptableDto> ModifierAsync(Guid id, ModifierCompteRequest request);
     Task ActiverDesactiverAsync(Guid id, bool estActif);
     Task<List<CompteComptableDto>> ListerPourSelectAsync(string? classe = null);
+    Task<string> GenererProchainNumeroSousCompteAsync(Guid parentId);
+    Task<List<CompteComptableDto>> ListerSousComptesAsync(Guid parentId);
 }
 
 public class PlanComptableService : IPlanComptableService
 {
     private readonly AppDbContext _db;
+    private readonly ITenantContext _tenantContext; // 🌟 Injection du contexte de Tenant pour l'isolation SaaS
 
-    public PlanComptableService(AppDbContext db)
+    public PlanComptableService(AppDbContext db, ITenantContext tenantContext)
     {
         _db = db;
+        _tenantContext = tenantContext;
     }
 
     // ─── Lister ───────────────────────────────────────────────────────────────
     public async Task<PagedResult<CompteComptableDto>> ListerAsync(FiltreCompteQuery filtre)
     {
+        var tenantId = _tenantContext.TenantId ?? Guid.Empty;
+
         var query = _db.CompteComptables
             .Include(c => c.CompteParent)
             .Include(c => c.SousComptes)
+            // 🔒 Sécurité : On affiche le plan standard (système) OU les comptes propres à ce tenant
+            .Where(c => c.EstSysteme || c.TenantId == tenantId)
             .AsQueryable();
 
         if (!string.IsNullOrEmpty(filtre.Classe)
@@ -59,9 +67,9 @@ public class PlanComptableService : IPlanComptableService
             .ToListAsync();
 
         return new PagedResult<CompteComptableDto>(
-            Items:      items.Select(MapToDto).ToList(),
-            Page:       filtre.Page,
-            PageSize:   filtre.PageSize,
+            Items: items.Select(MapToDto).ToList(),
+            Page: filtre.Page,
+            PageSize: filtre.PageSize,
             TotalItems: total,
             TotalPages: (int)Math.Ceiling(total / (double)filtre.PageSize)
         );
@@ -70,10 +78,13 @@ public class PlanComptableService : IPlanComptableService
     // ─── Obtenir ──────────────────────────────────────────────────────────────
     public async Task<CompteComptableDto> ObtenirAsync(Guid id)
     {
+        var tenantId = _tenantContext.TenantId;
+
         var compte = await _db.CompteComptables
             .Include(c => c.CompteParent)
             .Include(c => c.SousComptes)
-            .FirstOrDefaultAsync(c => c.Id == id)
+            // 🔒 Sécurité : Empêche un tenant d'aller chercher un compte d'un autre tenant via son Guid
+            .FirstOrDefaultAsync(c => c.Id == id && (c.EstSysteme || c.TenantId == tenantId))
             ?? throw new KeyNotFoundException("Compte comptable introuvable.");
 
         return MapToDto(compte);
@@ -82,9 +93,11 @@ public class PlanComptableService : IPlanComptableService
     // ─── Créer ────────────────────────────────────────────────────────────────
     public async Task<CompteComptableDto> CreerAsync(CreerCompteRequest request)
     {
-        // Vérifier unicité du numéro dans ce tenant
+        var tenantId = _tenantContext.TenantId ?? Guid.Empty;
+
+        // 🔒 Sécurité : L'unicité du numéro se vérifie uniquement pour ce tenant ou dans le système général
         var numeroExiste = await _db.CompteComptables
-            .AnyAsync(c => c.Numero == request.Numero);
+            .AnyAsync(c => c.Numero == request.Numero && (c.TenantId == tenantId || c.EstSysteme));
         if (numeroExiste)
             throw new InvalidOperationException(
                 $"Le compte N° {request.Numero} existe déjà dans votre plan comptable.");
@@ -99,7 +112,7 @@ public class PlanComptableService : IPlanComptableService
         if (request.CompteParentId.HasValue)
         {
             var parentExiste = await _db.CompteComptables
-                .AnyAsync(c => c.Id == request.CompteParentId.Value && c.EstActif);
+                .AnyAsync(c => c.Id == request.CompteParentId.Value && c.EstActif && (c.EstSysteme || c.TenantId == tenantId));
             if (!parentExiste)
                 throw new KeyNotFoundException("Compte parent introuvable ou inactif.");
         }
@@ -110,13 +123,15 @@ public class PlanComptableService : IPlanComptableService
 
         var compte = new CompteComptable
         {
-            Numero          = request.Numero,
-            Libelle         = request.Libelle,
-            Classe          = (ClasseCompte)request.Classe,
-            Type            = typeCompte,
-            CompteParentId  = request.CompteParentId,
-            EstSysteme      = false,   // comptes créés manuellement ne sont pas système
-            EstActif        = true,
+            Id = Guid.NewGuid(),
+            Numero = request.Numero,
+            Libelle = request.Libelle,
+            Classe = (ClasseCompte)request.Classe,
+            Type = typeCompte,
+            CompteParentId = request.CompteParentId,
+            EstSysteme = false,   // Un compte créé manuellement ou par l'application n'est jamais système
+            EstActif = true,
+            TenantId = tenantId // 🌟 Liaison obligatoire au tenant actuel
         };
 
         _db.CompteComptables.Add(compte);
@@ -128,13 +143,15 @@ public class PlanComptableService : IPlanComptableService
     // ─── Modifier ─────────────────────────────────────────────────────────────
     public async Task<CompteComptableDto> ModifierAsync(Guid id, ModifierCompteRequest request)
     {
+        var tenantId = _tenantContext.TenantId;
+
         var compte = await _db.CompteComptables
-            .FirstOrDefaultAsync(c => c.Id == id)
+            .FirstOrDefaultAsync(c => c.Id == id && (c.EstSysteme || c.TenantId == tenantId))
             ?? throw new KeyNotFoundException("Compte comptable introuvable.");
 
-        // Les comptes système peuvent avoir le libellé modifié mais pas supprimés
-        compte.Libelle        = request.Libelle;
-        compte.EstActif       = request.EstActif;
+        // Les comptes système peuvent avoir le libellé modifié mais pas leur structure racine
+        compte.Libelle = request.Libelle;
+        compte.EstActif = request.EstActif;
         compte.CompteParentId = request.CompteParentId;
 
         await _db.SaveChangesAsync();
@@ -144,8 +161,10 @@ public class PlanComptableService : IPlanComptableService
     // ─── Activer / Désactiver ─────────────────────────────────────────────────
     public async Task ActiverDesactiverAsync(Guid id, bool estActif)
     {
+        var tenantId = _tenantContext.TenantId;
+
         var compte = await _db.CompteComptables
-            .FirstOrDefaultAsync(c => c.Id == id)
+            .FirstOrDefaultAsync(c => c.Id == id && (c.EstSysteme || c.TenantId == tenantId))
             ?? throw new KeyNotFoundException("Compte comptable introuvable.");
 
         // Vérifier qu'il n'a pas de mouvements si on désactive
@@ -161,12 +180,17 @@ public class PlanComptableService : IPlanComptableService
         await _db.SaveChangesAsync();
     }
 
-    // ─── Liste pour select (frontend) ─────────────────────────────────────────
+    // ─── Liste pour select (Optimisée pour la saisie d'écritures) ─────────────
     public async Task<List<CompteComptableDto>> ListerPourSelectAsync(string? classe = null)
     {
+        var tenantId = _tenantContext.TenantId;
+
+        // 🌟 RÈGLE COMPTABLE CRITIQUE : On ne doit pouvoir imputer des écritures que sur des comptes terminaux 
+        // (comptes feuilles / d'exécution). On exclut donc les comptes qui servent de parents.
         var query = _db.CompteComptables
-            .Include(c => c.SousComptes)
-            .Where(c => c.EstActif)
+            .Where(c => c.EstActif && (c.EstSysteme || c.TenantId == tenantId))
+            // Un compte est sélectionnable s'il n'a aucun enfant rattaché
+            .Where(c => !_db.CompteComptables.Any(enfant => enfant.CompteParentId == c.Id))
             .AsQueryable();
 
         if (!string.IsNullOrEmpty(classe)
@@ -180,19 +204,66 @@ public class PlanComptableService : IPlanComptableService
             .ToListAsync();
     }
 
+    // ─── Générer le prochain numéro disponible (Utile pour le frontend Blazor) ───
+    public async Task<string> GenererProchainNumeroSousCompteAsync(Guid parentId)
+    {
+        var tenantId = _tenantContext.TenantId;
+
+        // 1. Récupérer le compte parent
+        var parent = await _db.CompteComptables
+            .FirstOrDefaultAsync(c => c.Id == parentId && (c.EstSysteme || c.TenantId == tenantId))
+            ?? throw new KeyNotFoundException("Compte parent introuvable.");
+
+        // 2. Trouver le dernier enfant créé pour ce parent et ce tenant
+        var dernierEnfant = await _db.CompteComptables
+            .Where(c => c.CompteParentId == parentId && c.TenantId == tenantId)
+            .OrderByDescending(c => c.Numero)
+            .Select(c => c.Numero)
+            .FirstOrDefaultAsync();
+
+        if (dernierEnfant == null)
+        {
+            // Si aucun enfant n'existe, on ajoute un suffixe "1" ou "01" au numéro du parent
+            // Règle générale : Si la racine fait 3 chiffres (ex: 411), le premier sous-compte sera 4111 ou 41101
+            return $"{parent.Numero}1";
+        }
+
+        // 3. Incrémenter le dernier numéro trouvé
+        // On essaie d'extraire la partie incrémentale
+        if (long.TryParse(dernierEnfant, out var dernierNumero))
+        {
+            return (dernierNumero + 1).ToString();
+        }
+
+        return $"{parent.Numero}X"; // Fallback de sécurité
+    }
+
+    // ─── Lister les sous-comptes d'un parent spécifique ──────────────────────────
+    public async Task<List<CompteComptableDto>> ListerSousComptesAsync(Guid parentId)
+    {
+        var tenantId = _tenantContext.TenantId;
+
+        return await _db.CompteComptables
+            .Include(c => c.SousComptes)
+            .Where(c => c.CompteParentId == parentId && (c.EstSysteme || c.TenantId == tenantId))
+            .OrderBy(c => c.Numero)
+            .Select(c => MapToDto(c))
+            .ToListAsync();
+    }
+
     // ─── Mapper ───────────────────────────────────────────────────────────────
     private static CompteComptableDto MapToDto(CompteComptable c) => new(
-        Id:                 c.Id,
-        Numero:             c.Numero,
-        Libelle:            c.Libelle,
-        Classe:             (int)c.Classe,
-        LibelleClasse:      LibelleClasse((int)c.Classe),
-        Type:               c.Type.ToString(),
-        EstSysteme:         c.EstSysteme,
-        EstActif:           c.EstActif,
-        CompteParentId:     c.CompteParentId,
+        Id: c.Id,
+        Numero: c.Numero,
+        Libelle: c.Libelle,
+        Classe: (int)c.Classe,
+        LibelleClasse: LibelleClasse((int)c.Classe),
+        Type: c.Type.ToString(),
+        EstSysteme: c.EstSysteme,
+        EstActif: c.EstActif,
+        CompteParentId: c.CompteParentId,
         CompteParentNumero: c.CompteParent?.Numero,
-        NombreSousComptes:  c.SousComptes?.Count ?? 0
+        NombreSousComptes: c.SousComptes?.Count ?? 0
     );
 
     private static string LibelleClasse(int classe) => classe switch
@@ -204,6 +275,8 @@ public class PlanComptableService : IPlanComptableService
         5 => "Trésorerie",
         6 => "Charges",
         7 => "Produits",
+        8 => "Spéciaux (H.A.O.)",       // 🌟 Corrigé : Hors Activités Ordinaires
+        9 => "Engagements Hors Bilan",  // 🌟 Corrigé : Engagements
         _ => $"Classe {classe}"
     };
 }

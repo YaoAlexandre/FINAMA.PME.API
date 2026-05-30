@@ -18,6 +18,9 @@ JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
 
 var builder = WebApplication.CreateBuilder(args);
 
+// 🌟 Force Npgsql à mapper les DateTime locaux en UTC (Règle le problème de format de date)
+AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+
 // ─── Configuration de l'environnement ─────────────────────────────────────────
 // Note : 'allowedOrigins' reste disponible ici si tu en as besoin ailleurs, 
 // mais ton CORS utilise désormais l'analyse dynamique SetIsOriginAllowed.
@@ -26,11 +29,37 @@ var allowedOrigins = builder.Configuration
     .Get<string[]>() ?? [];
 
 // ─── Base de données ──────────────────────────────────────────────────────────
+
+//builder.Services.AddDbContext<AppDbContext>(options =>
+//    options.UseSqlServer(
+//        builder.Configuration.GetConnectionString("Default"),
+//        sql => sql.MigrationsAssembly("Finama.Infrastructure")
+//    ));
+
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlServer(
-        builder.Configuration.GetConnectionString("Default"),
-        sql => sql.MigrationsAssembly("Finama.Infrastructure")
-    ));
+{
+    // On récupère la chaîne, et si elle est null, on met une chaîne vide temporaire
+    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ?? "";
+
+    // 🌟 Si on est sur Render ou qu'on force Postgres
+    if (connectionString.Contains("postgres://") || connectionString.Contains("Host="))
+    {
+        options.UseNpgsql(connectionString,
+            sql => sql.MigrationsAssembly("Finama.Infrastructure"));
+    }
+    // 🏠 Sinon, on utilise SQL Server (Local ou fallback)
+    else
+    {
+        // Si la chaîne est vide (pendant le design-time), on met une chaîne de secours pour éviter le crash
+        var sqlServerPath = string.IsNullOrEmpty(connectionString)
+            ? "Server=localhost;Database=Dummy;Trusted_Connection=True;"
+            : connectionString;
+
+        options.UseSqlServer(sqlServerPath,
+            sql => sql.MigrationsAssembly("Finama.Infrastructure"));
+    }
+});
+
 
 // ─── Multi-tenant ─────────────────────────────────────────────────────────────
 builder.Services.AddHttpContextAccessor();
@@ -51,6 +80,7 @@ builder.Services.AddScoped<IClasseComptableService, ClasseComptableService>();
 builder.Services.AddScoped<ITenantInitializationService, TenantInitializationService>();
 builder.Services.AddScoped<IDeviseService, DeviseService>();
 builder.Services.AddScoped<IClotureService, ClotureService>();
+builder.Services.AddTransient<IEmailService, EmailService>();
 
 // ─── Validation FluentValidation ──────────────────────────────────────────────
 builder.Services.AddScoped<IValidator<CreerEcritureRequest>, CreerEcritureValidator>();
@@ -77,19 +107,54 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 
 // ─── Autorisation par rôles ───────────────────────────────────────────────────
+//builder.Services.AddAuthorization(options =>
+//{
+//    options.AddPolicy("AdminTenant", p =>
+//        p.RequireClaim("role", nameof(RoleUtilisateur.AdminTenant),
+//                               nameof(RoleUtilisateur.SuperAdmin)));
+
+//    options.AddPolicy("Comptable", p =>
+//        p.RequireClaim("role", nameof(RoleUtilisateur.AdminTenant),
+//                               nameof(RoleUtilisateur.Comptable),
+//                               nameof(RoleUtilisateur.SuperAdmin)));
+
+//    options.AddPolicy("SuperAdmin", p =>
+//        p.RequireClaim("role", nameof(RoleUtilisateur.SuperAdmin)));
+//});
+
 builder.Services.AddAuthorization(options =>
 {
+    // 1. Qui peut administrer le compte (inviter des gens, changer l'abonnement) ?
     options.AddPolicy("AdminTenant", p =>
         p.RequireClaim("role", nameof(RoleUtilisateur.AdminTenant),
                                nameof(RoleUtilisateur.SuperAdmin)));
 
+    // 2. Qui peut valider les écritures définitives et éditer le SYSCOHADA ?
     options.AddPolicy("Comptable", p =>
         p.RequireClaim("role", nameof(RoleUtilisateur.AdminTenant),
                                nameof(RoleUtilisateur.Comptable),
                                nameof(RoleUtilisateur.SuperAdmin)));
 
-    options.AddPolicy("SuperAdmin", p =>
-        p.RequireClaim("role", nameof(RoleUtilisateur.SuperAdmin)));
+    // 3. Qui peut faire de la saisie (les comptables + les assistants/collaborateurs) ?
+    options.AddPolicy("Saisie", p =>
+        p.RequireClaim("role", nameof(RoleUtilisateur.AdminTenant),
+                               nameof(RoleUtilisateur.Comptable),
+                               nameof(RoleUtilisateur.Collaborateur),
+                               nameof(RoleUtilisateur.SuperAdmin)));
+
+    // 4. Qui peut juste consulter ? Tout le monde a ce droit, y compris le profil "Lecture"
+    options.AddPolicy("LectureSeule", p =>
+        p.RequireClaim("role", nameof(RoleUtilisateur.AdminTenant),
+                               nameof(RoleUtilisateur.Comptable),
+                               nameof(RoleUtilisateur.Collaborateur),
+                               nameof(RoleUtilisateur.Lecture),
+                               nameof(RoleUtilisateur.Commercial),
+                               nameof(RoleUtilisateur.SuperAdmin)));
+
+    options.AddPolicy("Commercial", p =>
+    p.RequireClaim("role", nameof(RoleUtilisateur.Commercial),
+                           nameof(RoleUtilisateur.AdminTenant),
+                           nameof(RoleUtilisateur.SuperAdmin)));
 });
 
 // ─── CORS Dynamique pour Tunnels ngrok et Dev Local ───────────────────────────
@@ -107,7 +172,8 @@ builder.Services.AddCors(options =>
             if (origin.EndsWith(".ngrok-free.app") || origin.EndsWith(".ngrok-free.dev"))
                 return true;
 
-            if (origin.EndsWith(".netlify.app") || origin.EndsWith(".netlify.dev"))
+            // Autorise ton domaine de production Netlify
+            if (origin.EndsWith(".netlify.app") || origin.EndsWith(".onrender.com"))
                 return true;
 
             return false; // Bloque le reste du web par sécurité
@@ -172,11 +238,74 @@ app.UseAuthorization();  // puis les policies
 app.MapControllers();
 
 // ─── Migration automatique au démarrage (dev seulement) ───────────────────────
-if (app.Environment.IsDevelopment())
+//if (app.Environment.IsDevelopment())
+//{
+//    using var scope = app.Services.CreateScope();
+//    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+//    await db.Database.MigrateAsync();
+//}
+
+//using (var scope = app.Services.CreateScope())
+//{
+//    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+//    db.Database.Migrate(); // 🚀 C'est cette ligne qui fait le travail !
+//}
+
+using (var scope = app.Services.CreateScope())
 {
-    using var scope = app.Services.CreateScope();
-    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    await db.Database.MigrateAsync();
+    var services = scope.ServiceProvider;
+    var db = services.GetRequiredService<AppDbContext>();
+
+    try
+    {
+        Console.WriteLine("[DEPLOIEMENT] Analyse de la structure de la base de données...");
+
+        // 1. On utilise une connexion ADO.NET standard pour lire la réponse (0 ou 1) de Postgres
+        using var command = db.Database.GetDbConnection().CreateCommand();
+        command.CommandText = "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'Utilisateurs');";
+
+        // On s'assure que la connexion est ouverte
+        if (db.Database.GetDbConnection().State != System.Data.ConnectionState.Open)
+            await db.Database.GetDbConnection().OpenAsync();
+
+        // On récupère le résultat sous forme de booléen
+        bool tableExiste = (bool)(await command.ExecuteScalarAsync() ?? false);
+
+        if (tableExiste)
+        {
+            // 2. Même logique pour vérifier si la colonne OTP existe
+            command.CommandText = "SELECT EXISTS (SELECT FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'Utilisateurs' AND column_name = 'otp_code');"; // Attention : Postgres passe souvent les noms en minuscules 'otp_code'
+            bool colonneOtpExiste = (bool)(await command.ExecuteScalarAsync() ?? false);
+
+            // Cas A : La table existe mais PAS la colonne OTP -> Ancienne base détectée
+            if (!colonneOtpExiste)
+            {
+                Console.WriteLine("[DEPLOIEMENT] Ancienne structure détectée. Alignement de l'historique EF Core...");
+
+                command.CommandText = "CREATE TABLE IF NOT EXISTS \"__EFMigrationsHistory\" (\"MigrationId\" varchar(150) NOT NULL CONSTRAINT \"PK___EFMigrationsHistory\" PRIMARY KEY, \"ProductVersion\" varchar(32) NOT NULL);";
+                await command.ExecuteNonQueryAsync();
+
+                // Remplace '20260517232310_Inot' par le nom exact de ton fichier de migration initiale
+                command.CommandText = "INSERT INTO \"__EFMigrationsHistory\" (\"MigrationId\", \"ProductVersion\") VALUES ('20260517232310_Inot', '8.0.0') ON CONFLICT DO NOTHING;";
+                await command.ExecuteNonQueryAsync();
+            }
+            else
+            {
+                Console.WriteLine("[DEPLOIEMENT] Structure à jour détectée.");
+            }
+        }
+
+        // 3. On ferme proprement la connexion manuelle avant de laisser EF Core migrer
+        await db.Database.GetDbConnection().CloseAsync();
+
+        // 4. On applique les migrations restantes (comme l'ajout des colonnes OTP)
+        await db.Database.MigrateAsync();
+        Console.WriteLine("[DEPLOIEMENT] Base de données synchronisée avec succès !");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[DEPLOIEMENT CRASH] Erreur critique : {ex.Message}");
+    }
 }
 
 app.Run();

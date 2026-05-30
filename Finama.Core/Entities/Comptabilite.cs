@@ -25,6 +25,8 @@ public enum ClasseCompte
     Classe5 = 5,  // Trésorerie
     Classe6 = 6,  // Charges
     Classe7 = 7,  // Produits
+    Classe8 = 8,  // Produits
+    Classe9 = 9,  // Produits
 }
 
 public enum TypeCompte
