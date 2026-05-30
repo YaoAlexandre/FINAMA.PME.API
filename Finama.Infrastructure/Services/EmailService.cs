@@ -142,7 +142,8 @@ public class EmailService : IEmailService
     public async Task SendOtpEmailByMailKitAsync(string toEmail, string codeOtp)
     {
         var smtpHost = "smtp.gmail.com";
-        var smtpPort = 465; // SSL Implicite
+        var smtpPort = 587; // SSL Implicite
+        //var smtpPort = 465; // SSL Implicite
 
         var emailEmetteur = _configuration["EmailSettings:Username"]
                             ?? Environment.GetEnvironmentVariable("EmailSettings__Username");
