@@ -28,8 +28,15 @@ public class EmailService : IEmailService
         var smtpHost = "smtp.gmail.com";
         var smtpPort = 587;
 
-        var emailEmetteur = _configuration["EmailSettings:Username"];
-        var passwordApp = _configuration["EmailSettings:Password"];
+        //var emailEmetteur = _configuration["EmailSettings:Username"];
+        //var passwordApp = _configuration["EmailSettings:Password"];
+
+        var emailEmetteur = _configuration["EmailSettings:Username"]
+                         ?? Environment.GetEnvironmentVariable("EmailSettings__Username");
+
+        var passwordApp = _configuration["Configuration:Password"] // Attention : vous avez écrit Configuration dans le appsettings ? Il vaut mieux :
+                           ?? _configuration["EmailSettings:Password"]
+                           ?? Environment.GetEnvironmentVariable("EmailSettings__Password");
 
         using var client = new SmtpClient(smtpHost, smtpPort)
         {
