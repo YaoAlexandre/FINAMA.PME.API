@@ -20,6 +20,7 @@ public interface IEmailService
     Task SendOtpEmailAsync(string toEmail, string codeOtp);
     Task SendOtpEmailByApiAsync(string toEmail, string codeOtp);
     Task SendOtpEmailByMailKitAsync(string toEmail, string codeOtp); // La nouvelle méthode
+    Task SendOtpEmailByResendAsync(string toEmail, string codeOtp); // La nouvelle méthode
 }
 
 public class EmailService : IEmailService
@@ -189,6 +190,36 @@ public class EmailService : IEmailService
             // Déconnexion propre du protocole TCP
             await client.DisconnectAsync(true);
         }
+    }
+
+    public async Task SendOtpEmailByResendAsync(string toEmail, string codeOtp)
+    {
+        var apiKey = _configuration["Resend:ApiKey"] ?? Environment.GetEnvironmentVariable("Resend__ApiKey");
+        var emailEmetteur = _configuration["EmailSettings:Username"] ?? Environment.GetEnvironmentVariable("EmailSettings__Username");
+
+        using var client = new HttpClient();
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
+
+        var htmlBody = ObtenirTemplateHtml(codeOtp);
+
+        var emailData = new
+        {
+            from = $"FINAMA Sécurité <onboarding@resend.dev>", // Au début, Resend demande d'utiliser leur domaine de test
+            to = new[] { toEmail },
+            subject = $"[{codeOtp}] Votre code de vérification FINAMA",
+            html_content = htmlBody
+        };
+
+        var json = JsonSerializer.Serialize(emailData);
+        var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+        Console.WriteLine($"[RESEND API] Envoi de l'OTP via HTTP à {toEmail}...");
+        var response = await client.PostAsync("https://api.resend.com/emails", content);
+
+        if (response.IsSuccessStatusCode)
+            Console.WriteLine("[RESEND API] Succès !");
+        else
+            Console.WriteLine($"[RESEND API ERROR] : {await response.Content.ReadAsStringAsync()}");
     }
 
     /// <summary>
