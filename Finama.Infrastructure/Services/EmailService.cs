@@ -207,10 +207,17 @@ public class EmailService : IEmailService
             from = $"FINAMA Sécurité <onboarding@resend.dev>", // Au début, Resend demande d'utiliser leur domaine de test
             to = new[] { toEmail },
             subject = $"[{codeOtp}] Votre code de vérification FINAMA",
-            html_content = htmlBody
+            html = htmlBody
         };
 
-        var json = JsonSerializer.Serialize(emailData);
+        // 1. Définir les options pour forcer le camelCase (minuscules au début)
+        var jsonOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        };
+
+        // 2. Passer les options à la sérialisation
+        var json = JsonSerializer.Serialize(emailData, jsonOptions);
         var content = new StringContent(json, Encoding.UTF8, "application/json");
 
         Console.WriteLine($"[RESEND API] Envoi de l'OTP via HTTP à {toEmail}...");
