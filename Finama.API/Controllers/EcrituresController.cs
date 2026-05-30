@@ -27,7 +27,7 @@ public class EcrituresController : ControllerBase
     /// Crée une nouvelle écriture comptable en brouillon.
     /// </summary>
     [HttpPost]
-    [Authorize(Roles = "Comptable")] // Réactivé pour aligner la sécurité de saisie
+    [Authorize(Roles = "Comptable, AdmintTenant")] // Réactivé pour aligner la sécurité de saisie
     public async Task<IActionResult> Creer([FromBody] CreerEcritureRequest request)
     {
         var validation = await _validator.ValidateAsync(request);
@@ -133,7 +133,7 @@ public class EcrituresController : ControllerBase
     /// Valide une écriture en brouillon — irréversible.
     /// </summary>
     [HttpPut("{id:guid}/valider")]
-    [Authorize(Roles = "Comptable")]
+    [Authorize(Roles = "Comptable, AdminTenant")]
     public async Task<IActionResult> Valider(Guid id)
     {
         try

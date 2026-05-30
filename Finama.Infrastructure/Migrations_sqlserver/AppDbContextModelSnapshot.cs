@@ -193,7 +193,7 @@ namespace Finama.Infrastructure.Migrations
                         {
                             Id = new Guid("11111111-1111-1111-1111-111111111111"),
                             Code = "USD",
-                            CreatedAt = new DateTime(2026, 5, 21, 0, 52, 0, 313, DateTimeKind.Utc).AddTicks(2983),
+                            CreatedAt = new DateTime(2026, 5, 30, 13, 26, 52, 421, DateTimeKind.Utc).AddTicks(1794),
                             DateMiseAJour = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local),
                             EstActive = true,
                             IsDeleted = false,
@@ -205,7 +205,7 @@ namespace Finama.Infrastructure.Migrations
                         {
                             Id = new Guid("22222222-2222-2222-2222-222222222222"),
                             Code = "XOF",
-                            CreatedAt = new DateTime(2026, 5, 21, 0, 52, 0, 323, DateTimeKind.Utc).AddTicks(6699),
+                            CreatedAt = new DateTime(2026, 5, 30, 13, 26, 52, 431, DateTimeKind.Utc).AddTicks(6465),
                             DateMiseAJour = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local),
                             EstActive = true,
                             IsDeleted = false,
@@ -217,7 +217,7 @@ namespace Finama.Infrastructure.Migrations
                         {
                             Id = new Guid("33333333-3333-3333-3333-333333333333"),
                             Code = "EUR",
-                            CreatedAt = new DateTime(2026, 5, 21, 0, 52, 0, 323, DateTimeKind.Utc).AddTicks(6882),
+                            CreatedAt = new DateTime(2026, 5, 30, 13, 26, 52, 431, DateTimeKind.Utc).AddTicks(6598),
                             DateMiseAJour = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local),
                             EstActive = true,
                             IsDeleted = false,
@@ -229,7 +229,7 @@ namespace Finama.Infrastructure.Migrations
                         {
                             Id = new Guid("44444444-4444-4444-4444-444444444444"),
                             Code = "GHS",
-                            CreatedAt = new DateTime(2026, 5, 21, 0, 52, 0, 323, DateTimeKind.Utc).AddTicks(6904),
+                            CreatedAt = new DateTime(2026, 5, 30, 13, 26, 52, 431, DateTimeKind.Utc).AddTicks(6616),
                             DateMiseAJour = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local),
                             EstActive = true,
                             IsDeleted = false,
@@ -241,7 +241,7 @@ namespace Finama.Infrastructure.Migrations
                         {
                             Id = new Guid("55555555-5555-5555-5555-555555555555"),
                             Code = "NGN",
-                            CreatedAt = new DateTime(2026, 5, 21, 0, 52, 0, 323, DateTimeKind.Utc).AddTicks(6913),
+                            CreatedAt = new DateTime(2026, 5, 30, 13, 26, 52, 431, DateTimeKind.Utc).AddTicks(6626),
                             DateMiseAJour = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local),
                             EstActive = true,
                             IsDeleted = false,
@@ -774,6 +774,15 @@ namespace Finama.Infrastructure.Migrations
 
                     b.Property<bool>("AssujettTVA")
                         .HasColumnType("boolean");
+
+                    b.Property<string>("BanqueBIC")
+                        .HasColumnType("text");
+
+                    b.Property<string>("BanqueNom")
+                        .HasColumnType("text");
+
+                    b.Property<string>("BanqueRIB")
+                        .HasColumnType("text");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp without time zone");
