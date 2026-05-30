@@ -65,8 +65,8 @@ public class AuthService : IAuthService
         // LOG 3 : Est-ce que BCrypt valide le mot de passe ?
         Console.WriteLine($"[DIAGNOSTIC LOGIN] Résultat de la vérification BCrypt: {estValide}");
 
-        //if (!estValide)
-        //    throw new UnauthorizedAccessException("Email ou mot de passe incorrect.");
+        if (!estValide)
+            throw new UnauthorizedAccessException("Email ou mot de passe incorrect.");
 
         // 3. Vérification des statuts du compte après validation du mot de passe
         if (utilisateur.IsDeleted || !utilisateur.EstActif)

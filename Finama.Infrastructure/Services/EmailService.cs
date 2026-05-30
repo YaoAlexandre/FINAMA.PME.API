@@ -26,17 +26,27 @@ public class EmailService : IEmailService
     public async Task SendOtpEmailAsync(string toEmail, string codeOtp)
     {
         var smtpHost = "smtp.gmail.com";
-        var smtpPort = 587;
+        //var smtpPort = 587;
+        var smtpPort = 465;
 
         //var emailEmetteur = _configuration["EmailSettings:Username"];
         //var passwordApp = _configuration["EmailSettings:Password"];
 
+        // 1. Récupération des variables avec vos fallbacks
         var emailEmetteur = _configuration["EmailSettings:Username"]
-                         ?? Environment.GetEnvironmentVariable("EmailSettings__Username");
+                            ?? Environment.GetEnvironmentVariable("EmailSettings__Username");
 
-        var passwordApp = _configuration["Configuration:Password"] // Attention : vous avez écrit Configuration dans le appsettings ? Il vaut mieux :
-                           ?? _configuration["EmailSettings:Password"]
-                           ?? Environment.GetEnvironmentVariable("EmailSettings__Password");
+        var passwordApp = _configuration["EmailSettings:Password"]
+                          ?? Environment.GetEnvironmentVariable("EmailSettings__Password");
+
+        // 🔍 LOGS DE DIAGNOSTIC : On vérifie ce que .NET a réellement trouvé
+        Console.WriteLine($"[DIAGNOSTIC SMTP] Émetteur récupéré : '{emailEmetteur}'");
+        Console.WriteLine($"[DIAGNOSTIC SMTP] Mot de passe trouvé ? : {(!string.IsNullOrEmpty(passwordApp) ? "OUI (Masqué)" : "NON (NULL ou VIDE)")}");
+
+        if (string.IsNullOrEmpty(emailEmetteur) || string.IsNullOrEmpty(passwordApp))
+        {
+            throw new InvalidOperationException("[DIAGNOSTIC SMTP] Échec critique : Identifiants introuvables dans la configuration.");
+        }
 
         using var client = new SmtpClient(smtpHost, smtpPort)
         {
@@ -92,6 +102,19 @@ public class EmailService : IEmailService
 
         mailMessage.To.Add(toEmail);
 
-        await client.SendMailAsync(mailMessage);
+        try
+        {
+            Console.WriteLine($"[DIAGNOSTIC SMTP] Tentative d'envoi du mail de {emailEmetteur} vers {toEmail} via {smtpHost}:{smtpPort}...");
+
+            await client.SendMailAsync(mailMessage);
+
+            Console.WriteLine($"[DIAGNOSTIC SMTP] Succès ! Le mail a été accepté par le serveur SMTP.");
+        }
+        catch (Exception ex)
+        {
+            // 💥 LOG CRUCIAL : ex.ToString() affiche toute la pile, y compris l'erreur réseau cachée sous "Failure sending mail"
+            Console.WriteLine($"[CRITICAL OTP EMAIL ERROR] Échec de l'envoi. Détails complets :\n{ex.ToString()}");
+            throw; // On propage l'erreur pour ne pas masquer le problème
+        }
     }
 }
