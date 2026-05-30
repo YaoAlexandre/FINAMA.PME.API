@@ -22,6 +22,40 @@ namespace Finama.Infrastructure.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("Finama.Core.Entities.AppareilConfiance", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime>("DateDerniereValidation")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("DeviceId")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid>("UtilisateurId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UtilisateurId", "DeviceId")
+                        .IsUnique();
+
+                    b.ToTable("AppareilsConfiance", (string)null);
+                });
+
             modelBuilder.Entity("Finama.Core.Entities.ClasseComptable", b =>
                 {
                     b.Property<Guid>("TenantId")
@@ -31,7 +65,7 @@ namespace Finama.Infrastructure.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
@@ -45,7 +79,7 @@ namespace Finama.Infrastructure.Migrations
                         .HasColumnType("character varying(100)");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.HasKey("TenantId", "Numero");
 
@@ -65,7 +99,7 @@ namespace Finama.Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<bool>("EstActif")
                         .HasColumnType("boolean");
@@ -94,7 +128,7 @@ namespace Finama.Infrastructure.Migrations
                         .HasColumnType("text");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.HasKey("Id");
 
@@ -118,10 +152,10 @@ namespace Finama.Infrastructure.Migrations
                         .HasColumnType("character varying(3)");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<DateTime>("DateMiseAJour")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<bool>("EstActive")
                         .ValueGeneratedOnAdd()
@@ -145,7 +179,7 @@ namespace Finama.Infrastructure.Migrations
                         .HasColumnType("decimal(18,4)");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.HasKey("Id");
 
@@ -159,7 +193,7 @@ namespace Finama.Infrastructure.Migrations
                         {
                             Id = new Guid("11111111-1111-1111-1111-111111111111"),
                             Code = "USD",
-                            CreatedAt = new DateTime(2026, 5, 17, 23, 23, 9, 5, DateTimeKind.Utc).AddTicks(5792),
+                            CreatedAt = new DateTime(2026, 5, 30, 13, 26, 52, 421, DateTimeKind.Utc).AddTicks(1794),
                             DateMiseAJour = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local),
                             EstActive = true,
                             IsDeleted = false,
@@ -171,7 +205,7 @@ namespace Finama.Infrastructure.Migrations
                         {
                             Id = new Guid("22222222-2222-2222-2222-222222222222"),
                             Code = "XOF",
-                            CreatedAt = new DateTime(2026, 5, 17, 23, 23, 9, 19, DateTimeKind.Utc).AddTicks(4720),
+                            CreatedAt = new DateTime(2026, 5, 30, 13, 26, 52, 431, DateTimeKind.Utc).AddTicks(6465),
                             DateMiseAJour = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local),
                             EstActive = true,
                             IsDeleted = false,
@@ -183,7 +217,7 @@ namespace Finama.Infrastructure.Migrations
                         {
                             Id = new Guid("33333333-3333-3333-3333-333333333333"),
                             Code = "EUR",
-                            CreatedAt = new DateTime(2026, 5, 17, 23, 23, 9, 19, DateTimeKind.Utc).AddTicks(4906),
+                            CreatedAt = new DateTime(2026, 5, 30, 13, 26, 52, 431, DateTimeKind.Utc).AddTicks(6598),
                             DateMiseAJour = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local),
                             EstActive = true,
                             IsDeleted = false,
@@ -195,7 +229,7 @@ namespace Finama.Infrastructure.Migrations
                         {
                             Id = new Guid("44444444-4444-4444-4444-444444444444"),
                             Code = "GHS",
-                            CreatedAt = new DateTime(2026, 5, 17, 23, 23, 9, 19, DateTimeKind.Utc).AddTicks(4927),
+                            CreatedAt = new DateTime(2026, 5, 30, 13, 26, 52, 431, DateTimeKind.Utc).AddTicks(6616),
                             DateMiseAJour = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local),
                             EstActive = true,
                             IsDeleted = false,
@@ -207,7 +241,7 @@ namespace Finama.Infrastructure.Migrations
                         {
                             Id = new Guid("55555555-5555-5555-5555-555555555555"),
                             Code = "NGN",
-                            CreatedAt = new DateTime(2026, 5, 17, 23, 23, 9, 19, DateTimeKind.Utc).AddTicks(4938),
+                            CreatedAt = new DateTime(2026, 5, 30, 13, 26, 52, 431, DateTimeKind.Utc).AddTicks(6626),
                             DateMiseAJour = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local),
                             EstActive = true,
                             IsDeleted = false,
@@ -224,10 +258,10 @@ namespace Finama.Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<DateTime>("DateEcriture")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<Guid>("ExerciceId")
                         .HasColumnType("uuid");
@@ -260,7 +294,7 @@ namespace Finama.Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<Guid>("UtilisateurId")
                         .HasColumnType("uuid");
@@ -289,16 +323,16 @@ namespace Finama.Infrastructure.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("ClotureLe")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<DateTime>("DateDebut")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<DateTime>("DateFin")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<bool>("EstCloture")
                         .HasColumnType("boolean");
@@ -310,7 +344,7 @@ namespace Finama.Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.HasKey("Id");
 
@@ -326,13 +360,13 @@ namespace Finama.Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<DateTime?>("DateEcheance")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<DateTime>("DateFacture")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("Devise")
                         .IsRequired()
@@ -375,7 +409,7 @@ namespace Finama.Infrastructure.Migrations
                         .HasColumnType("text");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.HasKey("Id");
 
@@ -397,7 +431,7 @@ namespace Finama.Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<decimal>("Credit")
                         .HasColumnType("decimal(18,2)");
@@ -432,7 +466,7 @@ namespace Finama.Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.HasKey("Id");
 
@@ -457,7 +491,7 @@ namespace Finama.Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("Description")
                         .IsRequired()
@@ -482,7 +516,7 @@ namespace Finama.Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.HasKey("Id");
 
@@ -512,7 +546,7 @@ namespace Finama.Infrastructure.Migrations
                         .HasColumnType("character varying(2)");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("DeviseCode")
                         .IsRequired()
@@ -544,7 +578,7 @@ namespace Finama.Infrastructure.Migrations
                         .HasColumnType("decimal(5,2)");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.HasKey("Id");
 
@@ -733,7 +767,7 @@ namespace Finama.Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<DateTime?>("AbonnementExpireAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("Adresse")
                         .HasColumnType("text");
@@ -741,8 +775,17 @@ namespace Finama.Infrastructure.Migrations
                     b.Property<bool>("AssujettTVA")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("BanqueBIC")
+                        .HasColumnType("text");
+
+                    b.Property<string>("BanqueNom")
+                        .HasColumnType("text");
+
+                    b.Property<string>("BanqueRIB")
+                        .HasColumnType("text");
+
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("DeviseBase")
                         .IsRequired()
@@ -789,7 +832,7 @@ namespace Finama.Infrastructure.Migrations
                         .HasColumnType("text");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.HasKey("Id");
 
@@ -818,7 +861,7 @@ namespace Finama.Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("Devise")
                         .HasColumnType("text");
@@ -849,7 +892,7 @@ namespace Finama.Infrastructure.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.HasKey("Id");
 
@@ -867,10 +910,10 @@ namespace Finama.Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<DateTime?>("DerniereConnexionAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("Email")
                         .IsRequired()
@@ -883,6 +926,9 @@ namespace Finama.Infrastructure.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("IsOtpValidated")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("MotDePasseHash")
                         .IsRequired()
                         .HasMaxLength(500)
@@ -893,6 +939,12 @@ namespace Finama.Infrastructure.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<string>("OtpCode")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("OtpExpireAt")
+                        .HasColumnType("timestamp without time zone");
+
                     b.Property<string>("Prenom")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -902,7 +954,7 @@ namespace Finama.Infrastructure.Migrations
                         .HasColumnType("text");
 
                     b.Property<DateTime?>("RefreshTokenExpireAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<int>("Role")
                         .HasColumnType("integer");
@@ -911,7 +963,7 @@ namespace Finama.Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.HasKey("Id");
 
@@ -919,6 +971,17 @@ namespace Finama.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("Utilisateurs");
+                });
+
+            modelBuilder.Entity("Finama.Core.Entities.AppareilConfiance", b =>
+                {
+                    b.HasOne("Finama.Core.Entities.Utilisateur", "Utilisateur")
+                        .WithMany()
+                        .HasForeignKey("UtilisateurId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("Utilisateur");
                 });
 
             modelBuilder.Entity("Finama.Core.Entities.ClasseComptable", b =>

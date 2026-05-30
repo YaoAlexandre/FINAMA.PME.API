@@ -73,6 +73,19 @@ public static class PlanComptableOhadaSeed
         ("71", "Variation de stocks",              ClasseCompte.Classe7, TypeCompte.ResultatProduit),
         ("75", "Autres produits",                  ClasseCompte.Classe7, TypeCompte.ResultatProduit),
         ("77", "Produits financiers",              ClasseCompte.Classe7, TypeCompte.ResultatProduit),
+        // ── Classe 8 : Autres charges et produits (Hors Activités Ordinaires) ──────
+        ("81", "Charges hors activités ordinaires", ClasseCompte.Classe8, TypeCompte.ResultatCharge),
+        ("82", "Produits hors activités ordinaires", ClasseCompte.Classe8, TypeCompte.ResultatProduit),
+        ("83", "Participation des travailleurs",     ClasseCompte.Classe8, TypeCompte.ResultatCharge),
+        ("84", "Impôts sur le résultat",             ClasseCompte.Classe8, TypeCompte.ResultatCharge),
+        ("85", "Dotations HAO",                      ClasseCompte.Classe8, TypeCompte.ResultatCharge),
+        ("86", "Reprises HAO",                       ClasseCompte.Classe8, TypeCompte.ResultatProduit),
+
+        // ── Classe 9 : Comptes de gestion analytique / comptabilité analytique ────
+        ("90", "Comptes de gestion analytique",      ClasseCompte.Classe9, TypeCompte.ResultatCharge),
+        ("91", "Centres de coûts",                   ClasseCompte.Classe9, TypeCompte.ResultatCharge),
+        ("92", "Coûts de revient",                   ClasseCompte.Classe9, TypeCompte.ResultatCharge),
+        ("93", "Marges et résultats analytiques",    ClasseCompte.Classe9, TypeCompte.ResultatProduit)
     ];
 
     /// <summary>

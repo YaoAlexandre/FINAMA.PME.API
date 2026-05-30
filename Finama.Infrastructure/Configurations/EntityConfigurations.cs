@@ -179,6 +179,22 @@ public class ClasseComptableConfiguration : IEntityTypeConfiguration<ClasseCompt
     }
 }
 
+public class AppareilConfianceConfiguration : IEntityTypeConfiguration<AppareilConfiance>
+{
+    public void Configure(EntityTypeBuilder<AppareilConfiance> b)
+    {
+        b.ToTable("AppareilsConfiance");
+        b.HasKey(e => e.Id);
+        b.HasIndex(e => new { e.UtilisateurId, e.DeviceId }).IsUnique();
+        b.Property(e => e.DeviceId).HasMaxLength(200).IsRequired();
+        b.Property(e => e.DateDerniereValidation).IsRequired();
+        b.HasOne(e => e.Utilisateur)
+            .WithMany()
+            .HasForeignKey(e => e.UtilisateurId)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
 // 🌟 Nouvelle entité pour gérer les devises de manière centralisée
 public class DeviseConfiguration : IEntityTypeConfiguration<Devise>
 {

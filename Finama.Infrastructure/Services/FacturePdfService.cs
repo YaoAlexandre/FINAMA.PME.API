@@ -167,23 +167,35 @@ public class FacturePdfService : IFacturePdfService
                     col.Item().Height(8);
 
                     // ── Pied informations paiement ────────────────────────
-                    col.Item().Background(GrisLeger).Border(0.5f).BorderColor(GrisBordure)
-                        .Padding(8).Row(row =>
-                        {
-                            row.RelativeItem().Column(c =>
+                    var afficherPaiement = !string.IsNullOrWhiteSpace(f.EntrepriseBanqueNom)
+                                || !string.IsNullOrWhiteSpace(f.EntrepriseBanqueBIC);
+
+                    if (afficherPaiement)
+                    {
+                        col.Item().Background(GrisLeger).Border(0.5f).BorderColor(GrisBordure)
+                            .Padding(8).Row(row =>
                             {
-                                c.Item().Text("Mode de paiement").FontSize(7.5f).FontColor(GrisSoft);
-                                c.Item().Text("Virement bancaire / Mobile Money (Flooz ou T-Money)").FontSize(8.5f);
+                                row.RelativeItem().Column(c =>
+                                {
+                                    c.Item().Text("Mode de paiement").FontSize(7.5f).FontColor(GrisSoft);
+                                    c.Item().Text("Virement bancaire / Mobile Money").FontSize(8.5f);
+                                });
+
+                                row.ConstantItem(1).Background(GrisBordure);
+                                row.ConstantItem(10);
+
+                                row.RelativeItem().Column(c =>
+                                {
+                                    c.Item().Text("Détails de règlement").FontSize(7.5f).FontColor(GrisSoft);
+
+                                    if (!string.IsNullOrWhiteSpace(f.EntrepriseBanqueNom))
+                                        c.Item().Text(f.EntrepriseBanqueNom).FontSize(8.5f);
+
+                                    if (!string.IsNullOrWhiteSpace(f.EntrepriseBanqueBIC))
+                                        c.Item().Text($"Référence / Compte : {f.EntrepriseBanqueBIC}").FontSize(8.5f);
+                                });
                             });
-                            row.ConstantItem(1).Background(GrisBordure);
-                            row.ConstantItem(10);
-                            row.RelativeItem().Column(c =>
-                            {
-                                c.Item().Text("Coordonnées bancaires").FontSize(7.5f).FontColor(GrisSoft);
-                                c.Item().Text("Banque : ECOBANK Togo").FontSize(8.5f);
-                                c.Item().Text("BIC : ECOCNABB").FontSize(8.5f);
-                            });
-                        });
+                    }
 
                     if (!string.IsNullOrEmpty(f.Notes))
                     {
