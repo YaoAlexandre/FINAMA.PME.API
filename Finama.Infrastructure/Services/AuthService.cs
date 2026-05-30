@@ -121,7 +121,7 @@ public class AuthService : IAuthService
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[CRITICAL OTP EMAIL ERROR] Impossible d'envoyer le mail à {utilisateur.Email}. Erreur : {ex.Message}");
+                Console.WriteLine($"[CRITICAL OTP EMAIL ERROR] Impossible d'envoyer le mail à {utilisateur.Email}. Erreur : {ex.ToString()}");
             }
         });
 
