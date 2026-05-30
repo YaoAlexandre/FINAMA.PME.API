@@ -25,9 +25,12 @@ public record FactureDetailDto(
     string? TiersEmail,
     string? TiersNumeroFiscal,
     string TiersCode,
+    // Dans FactureDetailDto.cs
+    string? EntrepriseBanqueNom, 
+    string? EntrepriseBanqueBIC, 
 
-    // Lignes
-    List<LigneFactureDetailDto> Lignes,
+// Lignes
+List<LigneFactureDetailDto> Lignes,
 
     // Totaux
     decimal TotalHT,

@@ -148,19 +148,23 @@ public class FactureService : IFactureService
     }
 
     private static FactureDetailDto MapToDto(Facture f, Tenant tenant) => new(
-        Id: f.Id, Numero: f.Numero, Type: f.Type.ToString(), Statut: f.Statut.ToString(),
-        DateFacture: f.DateFacture, DateEcheance: f.DateEcheance, Devise: f.Devise,
-        EntrepriseNom: tenant.Nom, EntrepriseAdresse: tenant.Adresse,
-        EntrepriseTelephone: tenant.Telephone, EntrepriseEmail: tenant.Email,
-        EntrepriseNumeroFiscal: tenant.NumeroFiscal, EntreprisePays: tenant.Pays.Nom,
-        EntrepriseDeviseSymbole: tenant.Pays.DeviseSymbole,
-        TiersNom: f.Tiers.Nom, TiersAdresse: f.Tiers.Adresse,
-        TiersTelephone: f.Tiers.Telephone, TiersEmail: f.Tiers.Email,
-        TiersNumeroFiscal: f.Tiers.NINEA, TiersCode: f.Tiers.Code,
-        Lignes: f.Lignes.Select(l => new LigneFactureDetailDto(
-            l.Description, l.Quantite, l.PrixUnitaireHT, l.TauxTVA,
-            l.MontantHT, l.MontantTVA, l.MontantTTC)).ToList(),
-        TotalHT: f.TotalHT, TotalTVA: f.TotalTVA, TotalTTC: f.TotalTTC,
-        MontantRegle: f.MontantRegle, Solde: f.Solde, Notes: f.Notes
-    );
+    Id: f.Id, Numero: f.Numero, Type: f.Type.ToString(), Statut: f.Statut.ToString(),
+    DateFacture: f.DateFacture, DateEcheance: f.DateEcheance, Devise: f.Devise,
+    EntrepriseNom: tenant.Nom, EntrepriseAdresse: tenant.Adresse,
+    EntrepriseTelephone: tenant.Telephone, EntrepriseEmail: tenant.Email,
+    EntrepriseNumeroFiscal: tenant.NumeroFiscal, EntreprisePays: tenant.Pays.Nom,
+    EntrepriseDeviseSymbole: tenant.Pays.DeviseSymbole,
+    TiersNom: f.Tiers.Nom, TiersAdresse: f.Tiers.Adresse,
+    TiersTelephone: f.Tiers.Telephone, TiersEmail: f.Tiers.Email,
+    TiersNumeroFiscal: f.Tiers.NINEA, TiersCode: f.Tiers.Code,
+    Lignes: f.Lignes.Select(l => new LigneFactureDetailDto(
+        l.Description, l.Quantite, l.PrixUnitaireHT, l.TauxTVA,
+        l.MontantHT, l.MontantTVA, l.MontantTTC)).ToList(),
+    TotalHT: f.TotalHT, TotalTVA: f.TotalTVA, TotalTTC: f.TotalTTC,
+    MontantRegle: f.MontantRegle, Solde: f.Solde, Notes: f.Notes,
+
+    // Ajout des nouvelles propriétés pour le PDF
+    EntrepriseBanqueNom: tenant.BanqueNom,
+    EntrepriseBanqueBIC: tenant.BanqueBIC
+);
 }

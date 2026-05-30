@@ -133,7 +133,7 @@ public class EcrituresController : ControllerBase
     /// Valide une écriture en brouillon — irréversible.
     /// </summary>
     [HttpPut("{id:guid}/valider")]
-    [Authorize(Roles = "Comptable")]
+    [Authorize(Roles = "Comptable, AdminTenant")]
     public async Task<IActionResult> Valider(Guid id)
     {
         try

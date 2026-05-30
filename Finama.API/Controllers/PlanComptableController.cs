@@ -49,6 +49,43 @@ public class PlanComptableController : ControllerBase
     }
 
     /// <summary>
+    /// Calcule et suggère le prochain numéro de sous-compte disponible pour un parent donné.
+    /// Utilisé par l'assistant magique sur l'UI Blazor.
+    /// </summary>
+    [HttpGet("parent/{parentId:guid}/prochain-numero")]
+    public async Task<IActionResult> ObtenirProchainNumeroSousCompte(Guid parentId)
+    {
+        try
+        {
+            var prochainNumero = await _planService.GenererProchainNumeroSousCompteAsync(parentId);
+            // On retourne un Content brut (string) comme attendu par GetStringAsync() dans votre ApiService Blazor
+            return Content(prochainNumero, "text/plain");
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Récupère la liste des sous-comptes directs rattachés à un compte parent.
+    /// Utile pour le chargement à la demande (Lazy Loading) ou l'affichage en cascade.
+    /// </summary>
+    [HttpGet("parent/{parentId:guid}/sous-comptes")]
+    public async Task<IActionResult> ListerSousComptes(Guid parentId)
+    {
+        try
+        {
+            var sousComptes = await _planService.ListerSousComptesAsync(parentId);
+            return Ok(sousComptes);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
     /// Liste simplifiée pour les selects du frontend.
     /// Optionnel : filtrer par classe (ex: ?classe=4 pour comptes tiers).
     /// </summary>
@@ -68,7 +105,7 @@ public class PlanComptableController : ControllerBase
     }
 
     /// <summary>
-    /// Crée un nouveau compte personnalisé.
+    /// Crée un nouveau compte personnalisé ou un sous-compte.
     /// Validation OHADA : le premier chiffre du numéro doit correspondre à la classe.
     /// </summary>
     [HttpPost]

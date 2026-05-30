@@ -21,7 +21,9 @@ public class Tenant : BaseEntity
     public PlanAbonnement Plan { get; set; } = PlanAbonnement.Trial;
     public DateTime? AbonnementExpireAt { get; set; }
     public bool EstActif { get; set; } = true;
-
+    public string? BanqueNom { get; set; }
+    public string? BanqueBIC { get; set; }
+    public string? BanqueRIB { get; set; }
     // ─── Navigation ───────────────────────────────────────────────────────────
     public ICollection<Utilisateur> Utilisateurs { get; set; } = [];
     public ICollection<CompteComptable> CompteComptables { get; set; } = [];
