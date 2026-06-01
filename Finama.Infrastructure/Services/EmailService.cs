@@ -141,45 +141,49 @@ public class EmailService : IEmailService
     /// </summary>
     public async Task SendOtpEmailByMailKitAsync(string toEmail, string codeOtp)
     {
-        var smtpHost = "smtp.gmail.com";
-        var smtpPort = 587; // SSL Implicite
-        //var smtpPort = 465; // SSL Implicite
-
+        // 1. Récupération des variables (Déjà configurées via ton .env !)
         var emailEmetteur = _configuration["EmailSettings:Username"]
-                            ?? Environment.GetEnvironmentVariable("EmailSettings__Username");
+                            ?? _configuration["EmailSettings__Username"];
 
         var passwordApp = _configuration["EmailSettings:Password"]
-                          ?? Environment.GetEnvironmentVariable("EmailSettings__Password");
+                          ?? _configuration["EmailSettings__Password"];
 
         if (string.IsNullOrEmpty(emailEmetteur) || string.IsNullOrEmpty(passwordApp))
         {
-            throw new InvalidOperationException("[MAILKIT] Échec : Identifiants introuvables.");
+            throw new InvalidOperationException("[MAILKIT] Identifiants Gmail introuvables dans le .env.");
         }
 
-        // Création du message au format MimeKit
+        // 2. Création du message avec MimeKit
         var message = new MimeMessage();
         message.From.Add(new MailboxAddress("FINAMA Sécurité", emailEmetteur));
         message.To.Add(new MailboxAddress("", toEmail));
         message.Subject = $"[{codeOtp}] Votre code de vérification FINAMA";
 
-        var bodyBuilder = new BodyBuilder { HtmlBody = ObtenirTemplateHtml(codeOtp) };
+        var bodyBuilder = new BodyBuilder
+        {
+            HtmlBody = ObtenirTemplateHtml(codeOtp) // Ton template HTML actuel
+        };
         message.Body = bodyBuilder.ToMessageBody();
 
-        // ⚠️ Utilise explicitement le client MailKit.Net.Smtp.SmtpClient
-        using var client = new MailKit.Net.Smtp.SmtpClient();
+        // 3. Envoi avec le client MailKit
+        using var client = new SmtpClient();
         try
         {
-            Console.WriteLine($"[MAILKIT] Connexion SSL Directe à {smtpHost}:{smtpPort}...");
-            // SecureSocketOptions.SslOnConnect règle le problème de négociation du port 465
-            await client.ConnectAsync(smtpHost, smtpPort, SecureSocketOptions.SslOnConnect);
+            Console.WriteLine($"[MAILKIT] Connexion à smtp.gmail.com sur le port 587 (STARTTLS)...");
+
+            // 🔓 L'ASTUCE POUR LE LOCAL : On accepte tous les certificats SSL/TLS
+            client.ServerCertificateValidationCallback = (s, c, h, e) => true;
+
+            // Connexion sécurisée standard
+            await client.ConnectAsync("smtp.gmail.com", 587, SecureSocketOptions.StartTls);
 
             Console.WriteLine("[MAILKIT] Authentification en cours...");
             await client.AuthenticateAsync(emailEmetteur, passwordApp);
 
-            Console.WriteLine($"[MAILKIT] Envoi de l'e-mail à {toEmail}...");
+            Console.WriteLine($"[MAILKIT] Envoi de l'OTP à {toEmail}...");
             await client.SendAsync(message);
 
-            Console.WriteLine("[MAILKIT] Succès ! E-mail acheminé par Gmail.");
+            Console.WriteLine("[MAILKIT] Succès ! L'e-mail a été envoyé.");
         }
         catch (Exception ex)
         {
@@ -188,7 +192,6 @@ public class EmailService : IEmailService
         }
         finally
         {
-            // Déconnexion propre du protocole TCP
             await client.DisconnectAsync(true);
         }
     }

@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.IdentityModel.Tokens.Jwt;
+using System.IO;
 using Finama.Core.DTOs;
 using Finama.Core.Entities;
 using Finama.Core.Validators;
@@ -13,35 +14,51 @@ using Finama.Infrastructure.Services;
 using Finama.API.Middleware;
 
 // ⚠️ Désactive le remapping automatique des claims JWT par ASP.NET Core.
-// Sans ça, "sub" devient NameIdentifier et "role" devient un claim long URI.
 JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
 
 var builder = WebApplication.CreateBuilder(args);
 
+// ==============================================================================
+// 🔌 CHARGEMENT DYNAMIQUE DU FICHIER .ENV & CONFIGURATION
+// ==============================================================================
+
+// 1. Détection et chargement d'un fichier .env local s'il existe
+var envFilePath = Path.Combine(Directory.GetCurrentDirectory(), ".env");
+if (File.Exists(envFilePath))
+{
+    Console.WriteLine("[FINAMA CONFIG] Fichier .env détecté et injecté localement.");
+    DotNetEnv.Env.Load(envFilePath);
+}
+else
+{
+    Console.WriteLine("[FINAMA CONFIG] Aucun fichier .env trouvé. Utilisation des variables système globales.");
+}
+
+// 2. Détermination de l'environnement actif (priorité au .env / variables système, sinon Production)
+string env = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production";
+builder.Environment.EnvironmentName = env;
+
+// 3. Construction de la hiérarchie de configuration unifiée
+builder.Configuration
+    .SetBasePath(AppContext.BaseDirectory)
+    .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+    .AddJsonFile($"appsettings.{env}.json", optional: true, reloadOnChange: true)
+    .AddEnvironmentVariables(); // Permet à IConfiguration de lire directement le .env ou le système
+
+Console.WriteLine($"[FINAMA] Démarrage de l'arborescence en mode : {env}");
+
 // 🌟 Force Npgsql à mapper les DateTime locaux en UTC (Règle le problème de format de date)
 AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
-// ─── Configuration de l'environnement ─────────────────────────────────────────
-// Note : 'allowedOrigins' reste disponible ici si tu en as besoin ailleurs, 
-// mais ton CORS utilise désormais l'analyse dynamique SetIsOriginAllowed.
-var allowedOrigins = builder.Configuration
-    .GetSection("CorsSettings:AllowedOrigins")
-    .Get<string[]>() ?? [];
-
 // ─── Base de données ──────────────────────────────────────────────────────────
-
-//builder.Services.AddDbContext<AppDbContext>(options =>
-//    options.UseSqlServer(
-//        builder.Configuration.GetConnectionString("Default"),
-//        sql => sql.MigrationsAssembly("Finama.Infrastructure")
-//    ));
-
 builder.Services.AddDbContext<AppDbContext>(options =>
 {
-    // On récupère la chaîne, et si elle est null, on met une chaîne vide temporaire
-    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ?? "";
+    // Récupération unifiée depuis le provider (.env ou appsettings ou Render)
+    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+                           ?? builder.Configuration["ConnectionStrings__DefaultConnection"]
+                           ?? "";
 
-    // 🌟 Si on est sur Render ou qu'on force Postgres
+    // 🌟 Si on est sur Render, Docker ou qu'on force Postgres via .env
     if (connectionString.Contains("postgres://") || connectionString.Contains("Host="))
     {
         options.UseNpgsql(connectionString,
@@ -50,7 +67,6 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     // 🏠 Sinon, on utilise SQL Server (Local ou fallback)
     else
     {
-        // Si la chaîne est vide (pendant le design-time), on met une chaîne de secours pour éviter le crash
         var sqlServerPath = string.IsNullOrEmpty(connectionString)
             ? "Server=localhost;Database=Dummy;Trusted_Connection=True;"
             : connectionString;
@@ -59,7 +75,6 @@ builder.Services.AddDbContext<AppDbContext>(options =>
             sql => sql.MigrationsAssembly("Finama.Infrastructure"));
     }
 });
-
 
 // ─── Multi-tenant ─────────────────────────────────────────────────────────────
 builder.Services.AddHttpContextAccessor();
@@ -101,60 +116,27 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateAudience = true,
             ValidAudience = jwtSettings.Audience,
             ValidateLifetime = true,
-            ClockSkew = TimeSpan.Zero,
-            //RoleClaimType = "role"
+            ClockSkew = TimeSpan.Zero
         };
     });
 
 // ─── Autorisation par rôles ───────────────────────────────────────────────────
-//builder.Services.AddAuthorization(options =>
-//{
-//    options.AddPolicy("AdminTenant", p =>
-//        p.RequireClaim("role", nameof(RoleUtilisateur.AdminTenant),
-//                               nameof(RoleUtilisateur.SuperAdmin)));
-
-//    options.AddPolicy("Comptable", p =>
-//        p.RequireClaim("role", nameof(RoleUtilisateur.AdminTenant),
-//                               nameof(RoleUtilisateur.Comptable),
-//                               nameof(RoleUtilisateur.SuperAdmin)));
-
-//    options.AddPolicy("SuperAdmin", p =>
-//        p.RequireClaim("role", nameof(RoleUtilisateur.SuperAdmin)));
-//});
-
 builder.Services.AddAuthorization(options =>
 {
-    // 1. Qui peut administrer le compte (inviter des gens, changer l'abonnement) ?
     options.AddPolicy("AdminTenant", p =>
-        p.RequireClaim("role", nameof(RoleUtilisateur.AdminTenant),
-                               nameof(RoleUtilisateur.SuperAdmin)));
+        p.RequireClaim("role", nameof(RoleUtilisateur.AdminTenant), nameof(RoleUtilisateur.SuperAdmin)));
 
-    // 2. Qui peut valider les écritures définitives et éditer le SYSCOHADA ?
     options.AddPolicy("Comptable", p =>
-        p.RequireClaim("role", nameof(RoleUtilisateur.AdminTenant),
-                               nameof(RoleUtilisateur.Comptable),
-                               nameof(RoleUtilisateur.SuperAdmin)));
+        p.RequireClaim("role", nameof(RoleUtilisateur.AdminTenant), nameof(RoleUtilisateur.Comptable), nameof(RoleUtilisateur.SuperAdmin)));
 
-    // 3. Qui peut faire de la saisie (les comptables + les assistants/collaborateurs) ?
     options.AddPolicy("Saisie", p =>
-        p.RequireClaim("role", nameof(RoleUtilisateur.AdminTenant),
-                               nameof(RoleUtilisateur.Comptable),
-                               nameof(RoleUtilisateur.Collaborateur),
-                               nameof(RoleUtilisateur.SuperAdmin)));
+        p.RequireClaim("role", nameof(RoleUtilisateur.AdminTenant), nameof(RoleUtilisateur.Comptable), nameof(RoleUtilisateur.Collaborateur), nameof(RoleUtilisateur.SuperAdmin)));
 
-    // 4. Qui peut juste consulter ? Tout le monde a ce droit, y compris le profil "Lecture"
     options.AddPolicy("LectureSeule", p =>
-        p.RequireClaim("role", nameof(RoleUtilisateur.AdminTenant),
-                               nameof(RoleUtilisateur.Comptable),
-                               nameof(RoleUtilisateur.Collaborateur),
-                               nameof(RoleUtilisateur.Lecture),
-                               nameof(RoleUtilisateur.Commercial),
-                               nameof(RoleUtilisateur.SuperAdmin)));
+        p.RequireClaim("role", nameof(RoleUtilisateur.AdminTenant), nameof(RoleUtilisateur.Comptable), nameof(RoleUtilisateur.Collaborateur), nameof(RoleUtilisateur.Lecture), nameof(RoleUtilisateur.Commercial), nameof(RoleUtilisateur.SuperAdmin)));
 
     options.AddPolicy("Commercial", p =>
-    p.RequireClaim("role", nameof(RoleUtilisateur.Commercial),
-                           nameof(RoleUtilisateur.AdminTenant),
-                           nameof(RoleUtilisateur.SuperAdmin)));
+        p.RequireClaim("role", nameof(RoleUtilisateur.Commercial), nameof(RoleUtilisateur.AdminTenant), nameof(RoleUtilisateur.SuperAdmin)));
 });
 
 // ─── CORS Dynamique pour Tunnels ngrok et Dev Local ───────────────────────────
@@ -164,19 +146,16 @@ builder.Services.AddCors(options =>
     {
         policy.SetIsOriginAllowed(origin =>
         {
-            // Autorise automatiquement le localhost de dev
             if (origin.StartsWith("https://localhost") || origin.StartsWith("http://localhost"))
                 return true;
 
-            // Autorise dynamiquement TOUS les tunnels ngrok (front et back) au vol
             if (origin.EndsWith(".ngrok-free.app") || origin.EndsWith(".ngrok-free.dev"))
                 return true;
 
-            // Autorise ton domaine de production Netlify
             if (origin.EndsWith(".netlify.app") || origin.EndsWith(".onrender.com"))
                 return true;
 
-            return false; // Bloque le reste du web par sécurité
+            return false;
         })
         .AllowAnyHeader()
         .AllowAnyMethod()
@@ -190,12 +169,7 @@ builder.Services.AddEndpointsApiExplorer();
 // ─── Swagger avec support JWT ─────────────────────────────────────────────────
 builder.Services.AddSwaggerGen(c =>
 {
-    c.SwaggerDoc("v1", new OpenApiInfo
-    {
-        Title = "Finama API",
-        Version = "v1",
-        Description = "SaaS de comptabilité pour PME africaines"
-    });
+    c.SwaggerDoc("v1", new OpenApiInfo { Title = "Finama API", Version = "v1", Description = "SaaS de comptabilité pour PME africaines" });
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Name = "Authorization",
@@ -205,52 +179,24 @@ builder.Services.AddSwaggerGen(c =>
         In = ParameterLocation.Header,
         Description = "Entrez votre token JWT ici"
     });
-    c.AddSecurityRequirement(new OpenApiSecurityRequirement
-    {
-        {
-            new OpenApiSecurityScheme
-            {
-                Reference = new OpenApiReference
-                {
-                    Type = ReferenceType.SecurityScheme,
-                    Id   = "Bearer"
-                }
-            },
-            []
-        }
-    });
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement { { new OpenApiSecurityScheme { Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" } }, [] } });
 });
 
 var app = builder.Build();
 
-// ─── Pipeline HTTP (ordre important) ─────────────────────────────────────────
-app.UseExceptionHandling(); // en premier — capture tout
-
-// Activé hors du bloc IsDevelopment pour que tu puisses voir ton Swagger à distance via ngrok si besoin !
+// ─── Pipeline HTTP ───────────────────────────────────────────────────────────
+app.UseExceptionHandling();
 app.UseSwagger();
 app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "Finama v1"));
 
 app.UseHttpsRedirection();
 app.UseCors("Frontend");
-app.UseAuthentication(); // JWT d'abord
-app.UseAuthorization();  // puis les policies
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapControllers();
 
-// ─── Migration automatique au démarrage (dev seulement) ───────────────────────
-//if (app.Environment.IsDevelopment())
-//{
-//    using var scope = app.Services.CreateScope();
-//    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-//    await db.Database.MigrateAsync();
-//}
-
-//using (var scope = app.Services.CreateScope())
-//{
-//    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-//    db.Database.Migrate(); // 🚀 C'est cette ligne qui fait le travail !
-//}
-
+// ─── Migration et Synchronisation automatique au démarrage ───────────────────
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
@@ -260,24 +206,19 @@ using (var scope = app.Services.CreateScope())
     {
         Console.WriteLine("[DEPLOIEMENT] Analyse de la structure de la base de données...");
 
-        // 1. On utilise une connexion ADO.NET standard pour lire la réponse (0 ou 1) de Postgres
         using var command = db.Database.GetDbConnection().CreateCommand();
         command.CommandText = "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'Utilisateurs');";
 
-        // On s'assure que la connexion est ouverte
         if (db.Database.GetDbConnection().State != System.Data.ConnectionState.Open)
             await db.Database.GetDbConnection().OpenAsync();
 
-        // On récupère le résultat sous forme de booléen
         bool tableExiste = (bool)(await command.ExecuteScalarAsync() ?? false);
 
         if (tableExiste)
         {
-            // 2. Même logique pour vérifier si la colonne OTP existe
-            command.CommandText = "SELECT EXISTS (SELECT FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'Utilisateurs' AND column_name = 'otp_code');"; // Attention : Postgres passe souvent les noms en minuscules 'otp_code'
+            command.CommandText = "SELECT EXISTS (SELECT FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'Utilisateurs' AND column_name = 'otp_code');";
             bool colonneOtpExiste = (bool)(await command.ExecuteScalarAsync() ?? false);
 
-            // Cas A : La table existe mais PAS la colonne OTP -> Ancienne base détectée
             if (!colonneOtpExiste)
             {
                 Console.WriteLine("[DEPLOIEMENT] Ancienne structure détectée. Alignement de l'historique EF Core...");
@@ -285,7 +226,6 @@ using (var scope = app.Services.CreateScope())
                 command.CommandText = "CREATE TABLE IF NOT EXISTS \"__EFMigrationsHistory\" (\"MigrationId\" varchar(150) NOT NULL CONSTRAINT \"PK___EFMigrationsHistory\" PRIMARY KEY, \"ProductVersion\" varchar(32) NOT NULL);";
                 await command.ExecuteNonQueryAsync();
 
-                // Remplace '20260517232310_Inot' par le nom exact de ton fichier de migration initiale
                 command.CommandText = "INSERT INTO \"__EFMigrationsHistory\" (\"MigrationId\", \"ProductVersion\") VALUES ('20260517232310_Inot', '8.0.0') ON CONFLICT DO NOTHING;";
                 await command.ExecuteNonQueryAsync();
             }
@@ -295,10 +235,8 @@ using (var scope = app.Services.CreateScope())
             }
         }
 
-        // 3. On ferme proprement la connexion manuelle avant de laisser EF Core migrer
         await db.Database.GetDbConnection().CloseAsync();
 
-        // 4. On applique les migrations restantes (comme l'ajout des colonnes OTP)
         await db.Database.MigrateAsync();
         Console.WriteLine("[DEPLOIEMENT] Base de données synchronisée avec succès !");
     }
