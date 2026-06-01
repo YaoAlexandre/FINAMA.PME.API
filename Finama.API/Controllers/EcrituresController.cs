@@ -62,7 +62,7 @@ public class EcrituresController : ControllerBase
     /// 🌟 AJOUT : Met à jour une écriture comptable existante en statut Brouillon.
     /// </summary>
     [HttpPut("{id:guid}")]
-    [Authorize(Roles = "Comptable")]
+    [Authorize(Roles = "Comptable, AdminTenant")]
     public async Task<IActionResult> Modifier(Guid id, [FromBody] CreerEcritureRequest request)
     {
         // On réutilise le même validateur FluentValidation que la création
@@ -156,7 +156,7 @@ public class EcrituresController : ControllerBase
     /// Supprime un brouillon (soft delete).
     /// </summary>
     [HttpDelete("{id:guid}")]
-    [Authorize(Roles = "Comptable")]
+    [Authorize(Roles = "Comptable, AdminTenant")]
     public async Task<IActionResult> Supprimer(Guid id)
     {
         try

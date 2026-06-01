@@ -22,7 +22,7 @@ public class FacturesController : ControllerBase
     /// Crée une nouvelle facture.
     /// </summary>
     [HttpPost]
-    [Authorize(Roles = "Comptable")]
+    [Authorize(Roles = "Comptable, AdminTenant")]
     public async Task<IActionResult> Creer([FromBody] CreerFactureRequest request)
     {
         try
