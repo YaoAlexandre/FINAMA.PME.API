@@ -3,7 +3,6 @@ using System;
 using Finama.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -12,11 +11,9 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Finama.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260530132653_Init")]
-    partial class Init
+    partial class AppDbContextModelSnapshot : ModelSnapshot
     {
-        /// <inheritdoc />
-        protected override void BuildTargetModel(ModelBuilder modelBuilder)
+        protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -143,6 +140,63 @@ namespace Finama.Infrastructure.Migrations
                     b.ToTable("CompteComptables");
                 });
 
+            modelBuilder.Entity("Finama.Core.Entities.Devis", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid>("CreePar")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("DateCreation")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("DateExpiration")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Libelle")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("Numero")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<int>("Statut")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TiersId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TiersId");
+
+                    b.HasIndex("TenantId", "Numero")
+                        .IsUnique();
+
+                    b.ToTable("Devis", (string)null);
+                });
+
             modelBuilder.Entity("Finama.Core.Entities.Devise", b =>
                 {
                     b.Property<Guid>("Id")
@@ -196,7 +250,7 @@ namespace Finama.Infrastructure.Migrations
                         {
                             Id = new Guid("11111111-1111-1111-1111-111111111111"),
                             Code = "USD",
-                            CreatedAt = new DateTime(2026, 5, 30, 13, 26, 52, 421, DateTimeKind.Utc).AddTicks(1794),
+                            CreatedAt = new DateTime(2026, 6, 14, 15, 8, 26, 453, DateTimeKind.Utc).AddTicks(3405),
                             DateMiseAJour = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local),
                             EstActive = true,
                             IsDeleted = false,
@@ -208,7 +262,7 @@ namespace Finama.Infrastructure.Migrations
                         {
                             Id = new Guid("22222222-2222-2222-2222-222222222222"),
                             Code = "XOF",
-                            CreatedAt = new DateTime(2026, 5, 30, 13, 26, 52, 431, DateTimeKind.Utc).AddTicks(6465),
+                            CreatedAt = new DateTime(2026, 6, 14, 15, 8, 26, 469, DateTimeKind.Utc).AddTicks(5853),
                             DateMiseAJour = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local),
                             EstActive = true,
                             IsDeleted = false,
@@ -220,7 +274,7 @@ namespace Finama.Infrastructure.Migrations
                         {
                             Id = new Guid("33333333-3333-3333-3333-333333333333"),
                             Code = "EUR",
-                            CreatedAt = new DateTime(2026, 5, 30, 13, 26, 52, 431, DateTimeKind.Utc).AddTicks(6598),
+                            CreatedAt = new DateTime(2026, 6, 14, 15, 8, 26, 469, DateTimeKind.Utc).AddTicks(6036),
                             DateMiseAJour = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local),
                             EstActive = true,
                             IsDeleted = false,
@@ -232,7 +286,7 @@ namespace Finama.Infrastructure.Migrations
                         {
                             Id = new Guid("44444444-4444-4444-4444-444444444444"),
                             Code = "GHS",
-                            CreatedAt = new DateTime(2026, 5, 30, 13, 26, 52, 431, DateTimeKind.Utc).AddTicks(6616),
+                            CreatedAt = new DateTime(2026, 6, 14, 15, 8, 26, 469, DateTimeKind.Utc).AddTicks(6053),
                             DateMiseAJour = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local),
                             EstActive = true,
                             IsDeleted = false,
@@ -244,7 +298,7 @@ namespace Finama.Infrastructure.Migrations
                         {
                             Id = new Guid("55555555-5555-5555-5555-555555555555"),
                             Code = "NGN",
-                            CreatedAt = new DateTime(2026, 5, 30, 13, 26, 52, 431, DateTimeKind.Utc).AddTicks(6626),
+                            CreatedAt = new DateTime(2026, 6, 14, 15, 8, 26, 469, DateTimeKind.Utc).AddTicks(6076),
                             DateMiseAJour = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local),
                             EstActive = true,
                             IsDeleted = false,
@@ -422,6 +476,44 @@ namespace Finama.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("Factures");
+                });
+
+            modelBuilder.Entity("Finama.Core.Entities.LigneDevis", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("Designation")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("DevisId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<decimal>("PrixUnitaireHT")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("Quantite")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("TauxTVA")
+                        .HasColumnType("numeric");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DevisId");
+
+                    b.ToTable("LignesDevis");
                 });
 
             modelBuilder.Entity("Finama.Core.Entities.LigneEcriture", b =>
@@ -1016,6 +1108,25 @@ namespace Finama.Infrastructure.Migrations
                     b.Navigation("Tenant");
                 });
 
+            modelBuilder.Entity("Finama.Core.Entities.Devis", b =>
+                {
+                    b.HasOne("Finama.Core.Entities.Tenant", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Finama.Core.Entities.Tiers", "Tiers")
+                        .WithMany()
+                        .HasForeignKey("TiersId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("Tenant");
+
+                    b.Navigation("Tiers");
+                });
+
             modelBuilder.Entity("Finama.Core.Entities.EcritureComptable", b =>
                 {
                     b.HasOne("Finama.Core.Entities.ExerciceComptable", "Exercice")
@@ -1078,6 +1189,17 @@ namespace Finama.Infrastructure.Migrations
                     b.Navigation("Tenant");
 
                     b.Navigation("Tiers");
+                });
+
+            modelBuilder.Entity("Finama.Core.Entities.LigneDevis", b =>
+                {
+                    b.HasOne("Finama.Core.Entities.Devis", "Devis")
+                        .WithMany("Lignes")
+                        .HasForeignKey("DevisId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("Devis");
                 });
 
             modelBuilder.Entity("Finama.Core.Entities.LigneEcriture", b =>
@@ -1185,6 +1307,11 @@ namespace Finama.Infrastructure.Migrations
                     b.Navigation("Lignes");
 
                     b.Navigation("SousComptes");
+                });
+
+            modelBuilder.Entity("Finama.Core.Entities.Devis", b =>
+                {
+                    b.Navigation("Lignes");
                 });
 
             modelBuilder.Entity("Finama.Core.Entities.EcritureComptable", b =>

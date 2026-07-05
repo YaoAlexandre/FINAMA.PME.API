@@ -29,6 +29,9 @@ public class AppDbContext : DbContext
     public DbSet<ClasseComptable> ClassesComptables { get; set; }
     public DbSet<Devise> Devises { get; set; }
     public DbSet<AppareilConfiance> AppareilsConfiance { get; set; }
+    public DbSet<Devis> Devis => Set<Devis>();
+    public DbSet<LigneDevis> LignesDevis => Set<LigneDevis>();
+
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -76,6 +79,14 @@ public class AppDbContext : DbContext
 
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
+        foreach (var entry in ChangeTracker.Entries<BaseEntity>())
+        {
+            if (entry.State == EntityState.Added)
+                entry.Entity.CreatedAt = DateTime.UtcNow;
+
+            if (entry.State == EntityState.Modified)
+                entry.Entity.UpdatedAt = DateTime.UtcNow;
+        }
         // Intercepter les lignes d'écriture impactées par une modification (CUD)
         var lignesModifiees = ChangeTracker.Entries<LigneEcriture>()
             .Where(e => e.State == EntityState.Added || e.State == EntityState.Modified || e.State == EntityState.Deleted)

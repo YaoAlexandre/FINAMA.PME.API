@@ -260,6 +260,39 @@ namespace Finama.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "Devis",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    Numero = table.Column<string>(type: "character varying(30)", maxLength: 30, nullable: false),
+                    Libelle = table.Column<string>(type: "character varying(300)", maxLength: 300, nullable: false),
+                    DateCreation = table.Column<DateTime>(type: "timestamp without time zone", nullable: false),
+                    DateExpiration = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
+                    Statut = table.Column<int>(type: "integer", nullable: false),
+                    TiersId = table.Column<Guid>(type: "uuid", nullable: false),
+                    CreePar = table.Column<Guid>(type: "uuid", nullable: false),
+                    Notes = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Devis", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_Devis_Tenants_TenantId",
+                        column: x => x.TenantId,
+                        principalTable: "Tenants",
+                        principalColumn: "Id");
+                    table.ForeignKey(
+                        name: "FK_Devis_Tiers_TiersId",
+                        column: x => x.TiersId,
+                        principalTable: "Tiers",
+                        principalColumn: "Id");
+                });
+
+            migrationBuilder.CreateTable(
                 name: "Factures",
                 columns: table => new
                 {
@@ -293,6 +326,30 @@ namespace Finama.Infrastructure.Migrations
                         name: "FK_Factures_Tiers_TiersId",
                         column: x => x.TiersId,
                         principalTable: "Tiers",
+                        principalColumn: "Id");
+                });
+
+            migrationBuilder.CreateTable(
+                name: "LignesDevis",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    DevisId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Designation = table.Column<string>(type: "text", nullable: false),
+                    Quantite = table.Column<decimal>(type: "numeric", nullable: false),
+                    PrixUnitaireHT = table.Column<decimal>(type: "numeric", nullable: false),
+                    TauxTVA = table.Column<decimal>(type: "numeric", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_LignesDevis", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_LignesDevis_Devis_DevisId",
+                        column: x => x.DevisId,
+                        principalTable: "Devis",
                         principalColumn: "Id");
                 });
 
@@ -424,11 +481,11 @@ namespace Finama.Infrastructure.Migrations
                 columns: new[] { "Id", "Code", "CreatedAt", "DateMiseAJour", "EstActive", "IsDeleted", "Libelle", "Symbole", "TauxBaseDollar", "UpdatedAt" },
                 values: new object[,]
                 {
-                    { new Guid("11111111-1111-1111-1111-111111111111"), "USD", new DateTime(2026, 5, 30, 13, 26, 52, 421, DateTimeKind.Utc).AddTicks(1794), new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local), true, false, "Dollar américain", "$", 1.0000m, null },
-                    { new Guid("22222222-2222-2222-2222-222222222222"), "XOF", new DateTime(2026, 5, 30, 13, 26, 52, 431, DateTimeKind.Utc).AddTicks(6465), new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local), true, false, "Franc CFA (BCEAO)", "FCFA", 615.0000m, null },
-                    { new Guid("33333333-3333-3333-3333-333333333333"), "EUR", new DateTime(2026, 5, 30, 13, 26, 52, 431, DateTimeKind.Utc).AddTicks(6598), new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local), true, false, "Euro", "€", 0.9200m, null },
-                    { new Guid("44444444-4444-4444-4444-444444444444"), "GHS", new DateTime(2026, 5, 30, 13, 26, 52, 431, DateTimeKind.Utc).AddTicks(6616), new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local), true, false, "Cedi ghanéen", "₵", 14.5000m, null },
-                    { new Guid("55555555-5555-5555-5555-555555555555"), "NGN", new DateTime(2026, 5, 30, 13, 26, 52, 431, DateTimeKind.Utc).AddTicks(6626), new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local), true, false, "Naira nigérian", "₦", 1490.0000m, null }
+                    { new Guid("11111111-1111-1111-1111-111111111111"), "USD", new DateTime(2026, 6, 14, 15, 8, 26, 453, DateTimeKind.Utc).AddTicks(3405), new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local), true, false, "Dollar américain", "$", 1.0000m, null },
+                    { new Guid("22222222-2222-2222-2222-222222222222"), "XOF", new DateTime(2026, 6, 14, 15, 8, 26, 469, DateTimeKind.Utc).AddTicks(5853), new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local), true, false, "Franc CFA (BCEAO)", "FCFA", 615.0000m, null },
+                    { new Guid("33333333-3333-3333-3333-333333333333"), "EUR", new DateTime(2026, 6, 14, 15, 8, 26, 469, DateTimeKind.Utc).AddTicks(6036), new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local), true, false, "Euro", "€", 0.9200m, null },
+                    { new Guid("44444444-4444-4444-4444-444444444444"), "GHS", new DateTime(2026, 6, 14, 15, 8, 26, 469, DateTimeKind.Utc).AddTicks(6053), new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local), true, false, "Cedi ghanéen", "₵", 14.5000m, null },
+                    { new Guid("55555555-5555-5555-5555-555555555555"), "NGN", new DateTime(2026, 6, 14, 15, 8, 26, 469, DateTimeKind.Utc).AddTicks(6076), new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local), true, false, "Naira nigérian", "₦", 1490.0000m, null }
                 });
 
             migrationBuilder.InsertData(
@@ -466,6 +523,17 @@ namespace Finama.Infrastructure.Migrations
                 table: "CompteComptables",
                 columns: new[] { "TenantId", "Numero" },
                 unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Devis_TenantId_Numero",
+                table: "Devis",
+                columns: new[] { "TenantId", "Numero" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Devis_TiersId",
+                table: "Devis",
+                column: "TiersId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Devises_Code",
@@ -509,6 +577,11 @@ namespace Finama.Infrastructure.Migrations
                 name: "IX_Factures_TiersId",
                 table: "Factures",
                 column: "TiersId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LignesDevis_DevisId",
+                table: "LignesDevis",
+                column: "DevisId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_LignesEcriture_CompteId",
@@ -597,10 +670,16 @@ namespace Finama.Infrastructure.Migrations
                 name: "Devises");
 
             migrationBuilder.DropTable(
+                name: "LignesDevis");
+
+            migrationBuilder.DropTable(
                 name: "LignesEcriture");
 
             migrationBuilder.DropTable(
                 name: "LignesFacture");
+
+            migrationBuilder.DropTable(
+                name: "Devis");
 
             migrationBuilder.DropTable(
                 name: "Ecritures");

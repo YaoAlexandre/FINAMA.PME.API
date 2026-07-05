@@ -1,7 +1,8 @@
+using Finama.Core.DTOs;
+using Finama.Infrastructure.Data;
+using Finama.Infrastructure.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Finama.Core.DTOs;
-using Finama.Infrastructure.Services;
 
 namespace Finama.API.Controllers;
 
@@ -11,10 +12,12 @@ namespace Finama.API.Controllers;
 public class TiersController : ControllerBase
 {
     private readonly ITiersService _tiersService;
+    private readonly ITenantContext _tenantContext;
 
-    public TiersController(ITiersService tiersService)
+    public TiersController(ITiersService tiersService, ITenantContext tenantContext)
     {
         _tiersService = tiersService;
+        _tenantContext = tenantContext;
     }
 
     /// <summary>
@@ -25,12 +28,16 @@ public class TiersController : ControllerBase
     //[Authorize(Policy = "Comptable")]
     public async Task<IActionResult> Creer([FromBody] CreerTiersRequest request)
     {
+        var tenantId = _tenantContext.TenantId ?? Guid.Empty;
+       
         if (string.IsNullOrWhiteSpace(request.Nom))
             return BadRequest(new { message = "Le nom du tiers est obligatoire." });
 
         try
         {
-            var result = await _tiersService.CreerAsync(request);
+            //request.TenantId = tenantId;
+            var requestModifiee = request with { TenantId = tenantId };
+            var result = await _tiersService.CreerAsync(requestModifiee);
             return CreatedAtAction(nameof(Obtenir), new { id = result.Id }, result);
         }
         catch (KeyNotFoundException ex)

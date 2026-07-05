@@ -1,0 +1,178 @@
+version: '3.9'
+
+services:
+  # ============================================================================
+  # API Finama
+  # ============================================================================
+  finama-api:
+    image: finama-api:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    container_name: finama-api
+    restart: unless-stopped
+    
+    # ports:
+    #   - "10000:10000"
+    
+    environment:
+      # Environnement
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:10000
+      
+      # Base de données PostgreSQL
+      ConnectionStrings__DefaultConnection: >-
+        Host=postgres;
+        Port=5432;
+        Database=${POSTGRES_DATABASE};
+        Username=${POSTGRES_USER};
+        Password=${POSTGRES_PASSWORD};
+      
+      # JWT
+      Jwt__SecretKey: ${JWT_SECRET_KEY}
+      Jwt__Issuer: Finama
+      Jwt__Audience: Finama.Clients
+      Jwt__AccessTokenDureeMinutes: 60
+      Jwt__RefreshTokenDureeJours: 30
+      
+      # Emails (Resend)
+      Resend__ApiKey: ${RESEND_API_KEY}
+      EmailSettings__FromEmail: ${EMAIL_FROM_ADDRESS}
+      EmailSettings__FromName: Finama
+      
+      # Logs
+      LogLevel__Default: Information
+      LogLevel__Microsoft: Warning
+      
+      # CORS
+      AllowedHosts: "*"
+    
+    depends_on:
+      postgres:
+        condition: service_healthy
+    
+    volumes:
+      # Uploads/fichiers persistants (Exigence C1)
+      - finama-uploads:/app/uploads
+      # Logs
+      - finama-logs:/app/logs
+    
+    # Remplacement de curl par wget (compatible image Alpine de prod)
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:10000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    
+    networks:
+      - finama-network
+      - traefik-public
+    
+    labels:
+      - "traefik.enable=true"
+      # Configuration de votre vrai domaine (yavokou.com)
+      - "traefik.http.routers.finama-api.rule=Host(`api.yavokou.com`)"
+      - "traefik.http.routers.finama-api.entrypoints=websecure"
+      # Activation du TLS simple pour utiliser le certificat Wildcard global de l'hébergeur
+      - "traefik.http.routers.finama-api.tls=true"
+      # Port interne de l'application (Exigence A2)
+      - "traefik.http.services.finama-api.loadbalancer.server.port=10000"
+
+  # ============================================================================
+  # Base de données PostgreSQL
+  # ============================================================================
+  postgres:
+    image: postgres:17-alpine
+    container_name: finama-postgres
+    restart: unless-stopped
+    
+    environment:
+      POSTGRES_DB: ${POSTGRES_DATABASE}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    
+    ports:
+      - "5432:5432"
+    
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    
+    networks:
+      - finama-network
+    
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+
+  # ============================================================================
+  # Redis (Cache distribué)
+  # ============================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: finama-redis
+    restart: unless-stopped
+    
+    ports:
+      - "6379:6379"
+    
+    command: redis-server --requirepass ${REDIS_PASSWORD:-defaultpassword}
+    
+    volumes:
+      - redis-data:/data
+    
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    
+    networks:
+      - finama-network
+    
+    cap_drop:
+      - ALL
+
+  # ============================================================================
+  # Monitoring : Uptime Kuma
+  # ============================================================================
+  uptime-kuma:
+    image: louislam/uptime-kuma:latest
+    container_name: finama-uptime-kuma
+    restart: unless-stopped
+    
+    ports:
+      - "3001:3001"
+    
+    volumes:
+      - uptime-kuma-data:/app/data
+    
+    networks:
+      - finama-network
+
+# ─── CONFIGURATION GLOBALE DES VOLUMES ────────────────────────────────────────
+volumes:
+  postgres-data:
+    driver: local
+  redis-data:
+    driver: local
+  finama-uploads:
+    driver: local
+  finama-logs:
+    driver: local
+  uptime-kuma-data:
+    driver: local
+
+# ─── CONFIGURATION GLOBALE DES RÉSEAUX ────────────────────────────────────────
+networks:
+  finama-network:
+    driver: bridge
+  traefik-public:
+    external: true
