@@ -1,4 +1,10 @@
-using System.Text;
+using Finama.API.Middleware;
+using Finama.Core.DTOs;
+using Finama.Core.Entities;
+using Finama.Core.Validators;
+using Finama.Infrastructure.Data;
+using Finama.Infrastructure.Services;
+using Finama.Infrastructure.Services.Commercials;
 using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -6,12 +12,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.IdentityModel.Tokens.Jwt;
 using System.IO;
-using Finama.Core.DTOs;
-using Finama.Core.Entities;
-using Finama.Core.Validators;
-using Finama.Infrastructure.Data;
-using Finama.Infrastructure.Services;
-using Finama.API.Middleware;
+using System.Text;
 
 // ⚠️ Désactive le remapping automatique des claims JWT par ASP.NET Core.
 JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
@@ -96,6 +97,7 @@ builder.Services.AddScoped<ITenantInitializationService, TenantInitializationSer
 builder.Services.AddScoped<IDeviseService, DeviseService>();
 builder.Services.AddScoped<IClotureService, ClotureService>();
 builder.Services.AddTransient<IEmailService, EmailService>();
+builder.Services.AddScoped<IDevisService, DevisService>();
 
 // ─── Validation FluentValidation ──────────────────────────────────────────────
 builder.Services.AddScoped<IValidator<CreerEcritureRequest>, CreerEcritureValidator>();
@@ -182,7 +184,11 @@ builder.Services.AddSwaggerGen(c =>
     c.AddSecurityRequirement(new OpenApiSecurityRequirement { { new OpenApiSecurityScheme { Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" } }, [] } });
 });
 
+builder.Services.AddHealthChecks();
+
 var app = builder.Build();
+
+app.MapHealthChecks("/health");
 
 // ─── Pipeline HTTP ───────────────────────────────────────────────────────────
 app.UseExceptionHandling();
