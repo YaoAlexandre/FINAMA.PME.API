@@ -8,7 +8,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 
-// Namespaces pour MailKit (Nouveau)
+// Namespaces pour MailKit
 using MimeKit;
 using MailKit.Net.Smtp;
 using MailKit.Security;
@@ -17,10 +17,15 @@ namespace Finama.Infrastructure.Services;
 
 public interface IEmailService
 {
+    // Méthodes d'envoi d'e-mails génériques
+    Task SendEmailAsync(string toEmail, string subject, string htmlContent);
+    Task SendEmailByResendAsync(string toEmail, string subject, string htmlContent);
+
+    // Méthodes spécifiques OTP
     Task SendOtpEmailAsync(string toEmail, string codeOtp);
     Task SendOtpEmailByApiAsync(string toEmail, string codeOtp);
-    Task SendOtpEmailByMailKitAsync(string toEmail, string codeOtp); // La nouvelle méthode
-    Task SendOtpEmailByResendAsync(string toEmail, string codeOtp); // La nouvelle méthode
+    Task SendOtpEmailByMailKitAsync(string toEmail, string codeOtp);
+    Task SendOtpEmailByResendAsync(string toEmail, string codeOtp);
 }
 
 public class EmailService : IEmailService
@@ -30,6 +35,69 @@ public class EmailService : IEmailService
     public EmailService(IConfiguration configuration)
     {
         _configuration = configuration;
+    }
+
+    /// <summary>
+    /// Envoi générique via l'API Resend HTTP (Recommandé pour la production)
+    /// </summary>
+    public async Task SendEmailByResendAsync(string toEmail, string subject, string htmlContent)
+    {
+        var apiKey = _configuration["Resend:ApiKey"] ?? Environment.GetEnvironmentVariable("Resend__ApiKey");
+
+        var emailEmetteur = _configuration["Resend:From"]
+                            ?? Environment.GetEnvironmentVariable("Resend__From")
+                            ?? "ne-pas-repondre@finamaweb.com";
+
+        using var client = new HttpClient();
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
+
+        var emailData = new
+        {
+            from = $"FINAMA SaaS <{emailEmetteur}>",
+            to = new[] { toEmail },
+            subject = subject,
+            html = htmlContent
+        };
+
+        var jsonOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        };
+
+        var json = JsonSerializer.Serialize(emailData, jsonOptions);
+        var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+        Console.WriteLine($"[RESEND API] Envoi d'un e-mail à {toEmail} (Sujet : {subject})...");
+        var response = await client.PostAsync("https://api.resend.com/emails", content);
+
+        if (response.IsSuccessStatusCode)
+        {
+            Console.WriteLine("[RESEND API] E-mail envoyé avec succès !");
+        }
+        else
+        {
+            var errorDetails = await response.Content.ReadAsStringAsync();
+            Console.WriteLine($"[RESEND API ERROR] : {errorDetails}");
+            throw new HttpRequestException($"Erreur lors de l'envoi de l'e-mail via Resend: {errorDetails}");
+        }
+    }
+
+    /// <summary>
+    /// Envoi générique standard (fallback vers Resend)
+    /// </summary>
+    public async Task SendEmailAsync(string toEmail, string subject, string htmlContent)
+    {
+        await SendEmailByResendAsync(toEmail, subject, htmlContent);
+    }
+
+    /// <summary>
+    /// Envoi d'un code OTP via Resend
+    /// </summary>
+    public async Task SendOtpEmailByResendAsync(string toEmail, string codeOtp)
+    {
+        var htmlBody = ObtenirTemplateHtml(codeOtp);
+        var subject = $"[{codeOtp}] Votre code de vérification FINAMA";
+        await SendEmailByResendAsync(toEmail, subject, htmlBody);
     }
 
     /// <summary>
@@ -141,7 +209,6 @@ public class EmailService : IEmailService
     /// </summary>
     public async Task SendOtpEmailByMailKitAsync(string toEmail, string codeOtp)
     {
-        // 1. Récupération des variables (Déjà configurées via ton .env !)
         var emailEmetteur = _configuration["EmailSettings:Username"]
                             ?? _configuration["EmailSettings__Username"];
 
@@ -150,10 +217,9 @@ public class EmailService : IEmailService
 
         if (string.IsNullOrEmpty(emailEmetteur) || string.IsNullOrEmpty(passwordApp))
         {
-            throw new InvalidOperationException("[MAILKIT] Identifiants Gmail introuvables dans le .env.");
+            throw new InvalidOperationException("[MAILKIT] Identifiants Gmail introuvables dans la configuration.");
         }
 
-        // 2. Création du message avec MimeKit
         var message = new MimeMessage();
         message.From.Add(new MailboxAddress("FINAMA Sécurité", emailEmetteur));
         message.To.Add(new MailboxAddress("", toEmail));
@@ -161,20 +227,17 @@ public class EmailService : IEmailService
 
         var bodyBuilder = new BodyBuilder
         {
-            HtmlBody = ObtenirTemplateHtml(codeOtp) // Ton template HTML actuel
+            HtmlBody = ObtenirTemplateHtml(codeOtp)
         };
         message.Body = bodyBuilder.ToMessageBody();
 
-        // 3. Envoi avec le client MailKit
-        using var client = new SmtpClient();
+        using var client = new MailKit.Net.Smtp.SmtpClient();
         try
         {
             Console.WriteLine($"[MAILKIT] Connexion à smtp.gmail.com sur le port 587 (STARTTLS)...");
 
-            // 🔓 L'ASTUCE POUR LE LOCAL : On accepte tous les certificats SSL/TLS
             client.ServerCertificateValidationCallback = (s, c, h, e) => true;
 
-            // Connexion sécurisée standard
             await client.ConnectAsync("smtp.gmail.com", 587, SecureSocketOptions.StartTls);
 
             Console.WriteLine("[MAILKIT] Authentification en cours...");
@@ -196,10 +259,9 @@ public class EmailService : IEmailService
         }
     }
 
-    public async Task SendOtpEmailByResendAsync(string toEmail, string codeOtp)
+    public async Task SendOtpEmailByResendAsyncold(string toEmail, string codeOtp)
     {
         var apiKey = _configuration["Resend:ApiKey"] ?? Environment.GetEnvironmentVariable("Resend__ApiKey");
-        var emailEmetteur = _configuration["EmailSettings:Username"] ?? Environment.GetEnvironmentVariable("EmailSettings__Username");
 
         using var client = new HttpClient();
         client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
@@ -208,23 +270,21 @@ public class EmailService : IEmailService
 
         var emailData = new
         {
-            from = $"FINAMA Sécurité <onboarding@resend.dev>", // Au début, Resend demande d'utiliser leur domaine de test
+            from = "FINAMA Sécurité <onboarding@resend.dev>",
             to = new[] { toEmail },
             subject = $"[{codeOtp}] Votre code de vérification FINAMA",
             html = htmlBody
         };
 
-        // 1. Définir les options pour forcer le camelCase (minuscules au début)
         var jsonOptions = new JsonSerializerOptions
         {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         };
 
-        // 2. Passer les options à la sérialisation
         var json = JsonSerializer.Serialize(emailData, jsonOptions);
         var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-        Console.WriteLine($"[RESEND API] Envoi de l'OTP via HTTP à {toEmail}...");
+        Console.WriteLine($"[RESEND API OLD] Envoi de l'OTP via HTTP à {toEmail}...");
         var response = await client.PostAsync("https://api.resend.com/emails", content);
 
         if (response.IsSuccessStatusCode)
@@ -234,7 +294,7 @@ public class EmailService : IEmailService
     }
 
     /// <summary>
-    /// Centralisation du template HTML pour FINAMA
+    /// Centralisation du template HTML pour les OTP FINAMA
     /// </summary>
     private static string ObtenirTemplateHtml(string codeOtp)
     {
@@ -256,7 +316,7 @@ public class EmailService : IEmailService
                         <span style=""font-size: 32px; font-weight: 700; color: #0284c7; letter-spacing: 6px; font-family: monospace;"">{codeOtp}</span>
                     </div>
                     <p style=""color: #64748b; font-size: 12px; line-height: 1.5; margin: 0;"">
-                        ⏱️ Ce code est strictement confidentiel et expirera dans <strong>10 minutes</strong>.<br/>
+                        ⏱️ Ce code est strictly confidentiel et expirera dans <strong>10 minutes</strong>.<br/>
                         Si vous n'êtes pas à l'origine de cette tentative, vous pouvez ignorer cet e-mail en toute sécurité.
                     </p>
                 </div>

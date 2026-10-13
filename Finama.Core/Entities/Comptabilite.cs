@@ -45,6 +45,8 @@ public class ExerciceComptable : TenantEntity
     public DateTime DateDebut { get; set; }
     public DateTime DateFin { get; set; }
     public bool EstCloture { get; set; } = false;
+    // Ajoutez cette ligne :
+    public string Libelle { get; set; } = string.Empty;
     public DateTime? ClotureLe { get; set; }
     public ICollection<EcritureComptable> Ecritures { get; set; } = [];
 }

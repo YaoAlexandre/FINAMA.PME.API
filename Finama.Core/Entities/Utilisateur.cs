@@ -6,6 +6,7 @@ public class Utilisateur : TenantEntity
 {
     public string Nom { get; set; } = string.Empty;
     public string Prenom { get; set; } = string.Empty;
+    public string NomComplet => $"{Prenom} {Nom}".Trim();
     public string Email { get; set; } = string.Empty;
     public string MotDePasseHash { get; set; } = string.Empty;
     public RoleUtilisateur Role { get; set; } = RoleUtilisateur.Comptable;
@@ -16,6 +17,7 @@ public class Utilisateur : TenantEntity
     public string? OtpCode { get; set; }
     public DateTime? OtpExpireAt { get; set; }
     public bool IsOtpValidated { get; set; }
+    public bool DoitChangerMotDePasse { get; set; } = true;
 }
 
 public class AppareilConfiance : BaseEntity

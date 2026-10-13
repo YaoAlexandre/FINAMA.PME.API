@@ -10,7 +10,7 @@ namespace Finama.Infrastructure.Services;
 
 public interface IJwtService
 {
-    string GenererAccessToken(Utilisateur utilisateur, Tenant tenant);
+    string GenererAccessToken(Utilisateur utilisateur, Tenant? tenant);
     string GenererRefreshToken();
     ClaimsPrincipal? ValiderToken(string token);
 }
@@ -24,22 +24,26 @@ public class JwtService : IJwtService
         _settings = options.Value;
     }
 
-    public string GenererAccessToken(Utilisateur utilisateur, Tenant tenant)
+    public string GenererAccessToken(Utilisateur utilisateur, Tenant? tenant)
     {
         var cle = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_settings.SecretKey));
         var credentials = new SigningCredentials(cle, SecurityAlgorithms.HmacSha256);
 
-        var claims = new[]
+        var claims = new List<Claim>
+    {
+        new Claim(JwtRegisteredClaimNames.Sub,   utilisateur.Id.ToString()),
+        new Claim(JwtRegisteredClaimNames.Email, utilisateur.Email),
+        new Claim(JwtRegisteredClaimNames.Jti,   Guid.NewGuid().ToString()),
+        new Claim(ClaimTypes.Role,               ((RoleUtilisateur)utilisateur.Role).ToString()), // 👈 Remplacement de "role"
+        new Claim("nom",                         $"{utilisateur.Prenom} {utilisateur.Nom}"),
+    };
+
+        if (tenant is not null)
         {
-            new Claim(JwtRegisteredClaimNames.Sub,   utilisateur.Id.ToString()),
-            new Claim(JwtRegisteredClaimNames.Email, utilisateur.Email),
-            new Claim(JwtRegisteredClaimNames.Jti,   Guid.NewGuid().ToString()),
-            new Claim("tenant_id",   tenant.Id.ToString()),
-            new Claim("tenant_slug", tenant.SlugUnique),
-            new Claim("tenant_nom",  tenant.Nom),
-            new Claim("role",        ((RoleUtilisateur)utilisateur.Role).ToString()),
-            new Claim("nom",         $"{utilisateur.Prenom} {utilisateur.Nom}"),
-        };
+            claims.Add(new Claim("tenant_id", tenant.Id.ToString()));
+            claims.Add(new Claim("tenant_slug", tenant.SlugUnique));
+            claims.Add(new Claim("tenant_nom", tenant.Nom));
+        }
 
         var token = new JwtSecurityToken(
             issuer: _settings.Issuer,

@@ -20,7 +20,7 @@ public class FactureService : IFactureService
 
     public FactureService(AppDbContext db, IFacturePdfService pdfService)
     {
-        _db         = db;
+        _db = db;
         _pdfService = pdfService;
     }
 
@@ -29,10 +29,15 @@ public class FactureService : IFactureService
         var tiers = await _db.Tiers.FirstOrDefaultAsync(t => t.Id == request.TiersId)
             ?? throw new KeyNotFoundException("Tiers introuvable.");
 
+        if (!tiers.TenantId.HasValue)
+            throw new InvalidOperationException("Le tiers sélectionné n'est rattaché à aucun tenant.");
+
+        var tenantId = tiers.TenantId.Value;
+
         var tenant = await _db.Tenants
             .Include(t => t.Pays)
             .IgnoreQueryFilters()
-            .FirstOrDefaultAsync(t => t.Id == tiers.TenantId)
+            .FirstOrDefaultAsync(t => t.Id == tenantId)
             ?? throw new KeyNotFoundException("Tenant introuvable.");
 
         var typePrefix = request.Type == TypeFactureDto.Vente ? "FA" : "AC";
@@ -50,33 +55,33 @@ public class FactureService : IFactureService
 
         var lignes = request.Lignes.Select(l => new LigneFacture
         {
-            TenantId         = tiers.TenantId,
-            Description      = l.Description,
-            Quantite         = l.Quantite,
-            PrixUnitaireHT   = l.PrixUnitaireHT,
-            TauxTVA          = l.TauxTVA,
+            TenantId = tenantId,
+            Description = l.Description,
+            Quantite = l.Quantite,
+            PrixUnitaireHT = l.PrixUnitaireHT,
+            TauxTVA = l.TauxTVA,
             CompteProduitsId = l.CompteProduitsId,
         }).ToList();
 
-        var totalHT  = lignes.Sum(l => l.MontantHT);
+        var totalHT = lignes.Sum(l => l.MontantHT);
         var totalTVA = lignes.Sum(l => l.MontantTVA);
 
         var facture = new Facture
         {
-            TenantId      = tiers.TenantId,
-            Numero        = $"{pattern}{seq:D6}",
-            Type          = request.Type == TypeFactureDto.Vente ? TypeFacture.Vente : TypeFacture.Achat,
-            DateFacture   = request.DateFacture,
-            DateEcheance  = request.DateEcheance,
-            Statut        = StatutFacture.Emise,
-            TiersId       = request.TiersId,
-            Devise        = tenant.DeviseBase,
-            TotalHT       = totalHT,
-            TotalTVA      = totalTVA,
-            TotalTTC      = totalHT + totalTVA,
-            MontantRegle  = 0,
-            Notes         = request.Notes,
-            Lignes        = lignes,
+            TenantId = tenantId,
+            Numero = $"{pattern}{seq:D6}",
+            Type = request.Type == TypeFactureDto.Vente ? TypeFacture.Vente : TypeFacture.Achat,
+            DateFacture = request.DateFacture,
+            DateEcheance = request.DateEcheance,
+            Statut = StatutFacture.Emise,
+            TiersId = request.TiersId,
+            Devise = tenant.DeviseBase,
+            TotalHT = totalHT,
+            TotalTVA = totalTVA,
+            TotalTTC = totalHT + totalTVA,
+            MontantRegle = 0,
+            Notes = request.Notes,
+            Lignes = lignes,
         };
 
         _db.Factures.Add(facture);
@@ -123,10 +128,9 @@ public class FactureService : IFactureService
             );
         }
 
-        // ─── SÉCURITÉ 2 : Extraire l'ID dans une variable locale isolée ───
-        Guid targetTenantId = factures.First().TenantId;
+        // ─── SÉCURITÉ 2 : Extraire l'ID du Tenant (Guid?) avec fallback / conversion ───
+        Guid? targetTenantId = factures.First().TenantId;
 
-        // EF Core sait maintenant traduire 'targetTenantId' comme un simple paramètre SQL standard (@__targetTenantId_0)
         var tenant = await _db.Tenants
             .Include(t => t.Pays)
             .IgnoreQueryFilters()
@@ -148,23 +152,21 @@ public class FactureService : IFactureService
     }
 
     private static FactureDetailDto MapToDto(Facture f, Tenant tenant) => new(
-    Id: f.Id, Numero: f.Numero, Type: f.Type.ToString(), Statut: f.Statut.ToString(),
-    DateFacture: f.DateFacture, DateEcheance: f.DateEcheance, Devise: f.Devise,
-    EntrepriseNom: tenant.Nom, EntrepriseAdresse: tenant.Adresse,
-    EntrepriseTelephone: tenant.Telephone, EntrepriseEmail: tenant.Email,
-    EntrepriseNumeroFiscal: tenant.NumeroFiscal, EntreprisePays: tenant.Pays.Nom,
-    EntrepriseDeviseSymbole: tenant.Pays.DeviseSymbole,
-    TiersNom: f.Tiers.Nom, TiersAdresse: f.Tiers.Adresse,
-    TiersTelephone: f.Tiers.Telephone, TiersEmail: f.Tiers.Email,
-    TiersNumeroFiscal: f.Tiers.NINEA, TiersCode: f.Tiers.Code,
-    Lignes: f.Lignes.Select(l => new LigneFactureDetailDto(
-        l.Description, l.Quantite, l.PrixUnitaireHT, l.TauxTVA,
-        l.MontantHT, l.MontantTVA, l.MontantTTC)).ToList(),
-    TotalHT: f.TotalHT, TotalTVA: f.TotalTVA, TotalTTC: f.TotalTTC,
-    MontantRegle: f.MontantRegle, Solde: f.Solde, Notes: f.Notes,
-
-    // Ajout des nouvelles propriétés pour le PDF
-    EntrepriseBanqueNom: tenant.BanqueNom,
-    EntrepriseBanqueBIC: tenant.BanqueBIC
-);
+        Id: f.Id, Numero: f.Numero, Type: f.Type.ToString(), Statut: f.Statut.ToString(),
+        DateFacture: f.DateFacture, DateEcheance: f.DateEcheance, Devise: f.Devise,
+        EntrepriseNom: tenant.Nom, EntrepriseAdresse: tenant.Adresse,
+        EntrepriseTelephone: tenant.Telephone, EntrepriseEmail: tenant.Email,
+        EntrepriseNumeroFiscal: tenant.NumeroFiscal, EntreprisePays: tenant.Pays.Nom,
+        EntrepriseDeviseSymbole: tenant.Pays.DeviseSymbole,
+        TiersNom: f.Tiers.Nom, TiersAdresse: f.Tiers.Adresse,
+        TiersTelephone: f.Tiers.Telephone, TiersEmail: f.Tiers.Email,
+        TiersNumeroFiscal: f.Tiers.NINEA, TiersCode: f.Tiers.Code,
+        Lignes: f.Lignes.Select(l => new LigneFactureDetailDto(
+            l.Description, l.Quantite, l.PrixUnitaireHT, l.TauxTVA,
+            l.MontantHT, l.MontantTVA, l.MontantTTC)).ToList(),
+        TotalHT: f.TotalHT, TotalTVA: f.TotalTVA, TotalTTC: f.TotalTTC,
+        MontantRegle: f.MontantRegle, Solde: f.Solde, Notes: f.Notes,
+        EntrepriseBanqueNom: tenant.BanqueNom,
+        EntrepriseBanqueBIC: tenant.BanqueBIC
+    );
 }

@@ -143,4 +143,20 @@ public class AuthController : ControllerBase
             TenantNom = User.FindFirst("tenant_nom")?.Value,
         });
     }
+
+    [Authorize]
+    [HttpPost("changer-mot-de-passe")]
+    public async Task<IActionResult> ChangerMotDePasse([FromBody] ChangerMotDePasseRequest request)
+    {
+        // Extraction de l'ID utilisateur depuis le Token JWT
+        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (userIdClaim == null || !Guid.TryParse(userIdClaim, out var userId))
+            return Unauthorized();
+
+        var result = await _authService.DefinirNouveauMotDePasseAsync(userId, request);
+        if (!result.IsSuccess)
+            return BadRequest(result);
+
+        return Ok(result);
+    }
 }

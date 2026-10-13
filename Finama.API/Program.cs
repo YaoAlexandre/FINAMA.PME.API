@@ -3,10 +3,12 @@ using Finama.Core.DTOs;
 using Finama.Core.Entities;
 using Finama.Core.Validators;
 using Finama.Infrastructure.Data;
+using Finama.Infrastructure.Seeds;
 using Finama.Infrastructure.Services;
 using Finama.Infrastructure.Services.Commercials;
 using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -23,11 +25,29 @@ var builder = WebApplication.CreateBuilder(args);
 // 🔌 CHARGEMENT DYNAMIQUE DU FICHIER .ENV & CONFIGURATION
 // ==============================================================================
 
-// 1. Détection et chargement d'un fichier .env local s'il existe
-var envFilePath = Path.Combine(Directory.GetCurrentDirectory(), ".env");
+// 1. Détection et chargement d'un fichier .env (support du dossier parent et du dossier binaire)
+var baseDirectory = Directory.GetCurrentDirectory();
+var envFilePath = Path.Combine(baseDirectory, ".env");
+
+if (!File.Exists(envFilePath))
+{
+    // Remonte d'un niveau (racine de la solution) si exécuté depuis /Finama.API
+    var parentDir = Directory.GetParent(baseDirectory)?.FullName;
+    if (parentDir != null)
+    {
+        envFilePath = Path.Combine(parentDir, ".env");
+    }
+}
+
+// Fallback pour les binaires publiés
+if (!File.Exists(envFilePath))
+{
+    envFilePath = Path.Combine(AppContext.BaseDirectory, ".env");
+}
+
 if (File.Exists(envFilePath))
 {
-    Console.WriteLine("[FINAMA CONFIG] Fichier .env détecté et injecté localement.");
+    Console.WriteLine($"[FINAMA CONFIG] Fichier .env détecté et injecté depuis : {envFilePath}");
     DotNetEnv.Env.Load(envFilePath);
 }
 else
@@ -44,36 +64,34 @@ builder.Configuration
     .SetBasePath(AppContext.BaseDirectory)
     .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
     .AddJsonFile($"appsettings.{env}.json", optional: true, reloadOnChange: true)
-    .AddEnvironmentVariables(); // Permet à IConfiguration de lire directement le .env ou le système
+    .AddEnvironmentVariables(); // Permet à IConfiguration de lire le .env injecté et le système
 
 Console.WriteLine($"[FINAMA] Démarrage de l'arborescence en mode : {env}");
-
-// 🌟 Force Npgsql à mapper les DateTime locaux en UTC (Règle le problème de format de date)
-AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
 // ─── Base de données ──────────────────────────────────────────────────────────
 builder.Services.AddDbContext<AppDbContext>(options =>
 {
-    // Récupération unifiée depuis le provider (.env ou appsettings ou Render)
     var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
                            ?? builder.Configuration["ConnectionStrings__DefaultConnection"]
                            ?? "";
 
-    // 🌟 Si on est sur Render, Docker ou qu'on force Postgres via .env
-    if (connectionString.Contains("postgres://") || connectionString.Contains("Host="))
+    // Détection explicite de PostgreSQL (Render / Docker / .env)
+    bool isPostgres = connectionString.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase)
+                   || connectionString.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase)
+                   || connectionString.Contains("Port=5432");
+
+    if (isPostgres)
     {
-        options.UseNpgsql(connectionString,
-            sql => sql.MigrationsAssembly("Finama.Infrastructure"));
+        AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+        options.UseNpgsql(connectionString, sql => sql.MigrationsAssembly("Finama.Infrastructure"));
     }
-    // 🏠 Sinon, on utilise SQL Server (Local ou fallback)
     else
     {
-        var sqlServerPath = string.IsNullOrEmpty(connectionString)
-            ? "Server=localhost;Database=Dummy;Trusted_Connection=True;"
+        var sqlServerPath = string.IsNullOrWhiteSpace(connectionString)
+            ? "Server=localhost;Database=FinamaDb;Trusted_Connection=True;TrustServerCertificate=True;"
             : connectionString;
 
-        options.UseSqlServer(sqlServerPath,
-            sql => sql.MigrationsAssembly("Finama.Infrastructure"));
+        options.UseSqlServer(sqlServerPath, sql => sql.MigrationsAssembly("Finama.Infrastructure"));
     }
 });
 
@@ -98,6 +116,7 @@ builder.Services.AddScoped<IDeviseService, DeviseService>();
 builder.Services.AddScoped<IClotureService, ClotureService>();
 builder.Services.AddTransient<IEmailService, EmailService>();
 builder.Services.AddScoped<IDevisService, DevisService>();
+builder.Services.AddScoped<ISuperAdminService, SuperAdminService>();
 
 // ─── Validation FluentValidation ──────────────────────────────────────────────
 builder.Services.AddScoped<IValidator<CreerEcritureRequest>, CreerEcritureValidator>();
@@ -146,20 +165,27 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("Frontend", policy =>
     {
+        // Dans builder.Services.AddCors(...)
         policy.SetIsOriginAllowed(origin =>
         {
+            // Autorise les fichiers locaux ouvert via file://
+            if (string.Equals(origin, "null", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            var allowedOrigins = builder.Configuration.GetSection("CorsSettings:AllowedOrigins").Get<string[]>() ?? Array.Empty<string>();
+            if (allowedOrigins.Any(o => o.Equals(origin, StringComparison.OrdinalIgnoreCase)))
+                return true;
+
             if (origin.StartsWith("https://localhost") || origin.StartsWith("http://localhost"))
                 return true;
 
-            if (origin.EndsWith(".ngrok-free.app") || origin.EndsWith(".ngrok-free.dev"))
-                return true;
-
-            if (origin.EndsWith(".netlify.app") || origin.EndsWith(".onrender.com"))
+            if (origin.EndsWith(".ngrok-free.app") || origin.EndsWith(".ngrok-free.dev") ||
+                origin.EndsWith(".netlify.app") || origin.EndsWith(".onrender.com") || origin.EndsWith(".finamaweb.com"))
                 return true;
 
             return false;
         })
-        .AllowAnyHeader()
+                .AllowAnyHeader()
         .AllowAnyMethod()
         .AllowCredentials();
     });
@@ -186,6 +212,7 @@ builder.Services.AddSwaggerGen(c =>
 
 builder.Services.AddHealthChecks();
 
+// ✅ CODE CORRIGÉ :
 var app = builder.Build();
 
 app.MapHealthChecks("/health");
@@ -202,53 +229,36 @@ app.UseAuthorization();
 
 app.MapControllers();
 
-// ─── Migration et Synchronisation automatique au démarrage ───────────────────
-using (var scope = app.Services.CreateScope())
+// ─── Migration et Seeding sécurisés ──────────────────────────────────────────
+await ApplyMigrationsAndSeedAsync(app);
+
+await app.RunAsync();
+
+// Méthode locale isolée
+static async Task ApplyMigrationsAndSeedAsync(WebApplication app)
 {
+    using var scope = app.Services.CreateScope();
     var services = scope.ServiceProvider;
-    var db = services.GetRequiredService<AppDbContext>();
+    var logger = services.GetRequiredService<ILogger<Program>>();
 
     try
     {
-        Console.WriteLine("[DEPLOIEMENT] Analyse de la structure de la base de données...");
+        var context = services.GetRequiredService<AppDbContext>();
 
-        using var command = db.Database.GetDbConnection().CreateCommand();
-        command.CommandText = "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'Utilisateurs');";
+        logger.LogInformation("[FINAMA INIT] Application des migrations EF Core...");
 
-        if (db.Database.GetDbConnection().State != System.Data.ConnectionState.Open)
-            await db.Database.GetDbConnection().OpenAsync();
+        // Timeout explicite pour les migrations pour éviter le blocage indéfini
+        context.Database.SetCommandTimeout(TimeSpan.FromSeconds(30));
+        await context.Database.MigrateAsync();
 
-        bool tableExiste = (bool)(await command.ExecuteScalarAsync() ?? false);
+        var passwordHasher = services.GetService<IPasswordHasher<Utilisateur>>();
+        await DataSeeder.SeedSuperAdminAsync(context, passwordHasher);
 
-        if (tableExiste)
-        {
-            command.CommandText = "SELECT EXISTS (SELECT FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'Utilisateurs' AND column_name = 'otp_code');";
-            bool colonneOtpExiste = (bool)(await command.ExecuteScalarAsync() ?? false);
-
-            if (!colonneOtpExiste)
-            {
-                Console.WriteLine("[DEPLOIEMENT] Ancienne structure détectée. Alignement de l'historique EF Core...");
-
-                command.CommandText = "CREATE TABLE IF NOT EXISTS \"__EFMigrationsHistory\" (\"MigrationId\" varchar(150) NOT NULL CONSTRAINT \"PK___EFMigrationsHistory\" PRIMARY KEY, \"ProductVersion\" varchar(32) NOT NULL);";
-                await command.ExecuteNonQueryAsync();
-
-                command.CommandText = "INSERT INTO \"__EFMigrationsHistory\" (\"MigrationId\", \"ProductVersion\") VALUES ('20260517232310_Inot', '8.0.0') ON CONFLICT DO NOTHING;";
-                await command.ExecuteNonQueryAsync();
-            }
-            else
-            {
-                Console.WriteLine("[DEPLOIEMENT] Structure à jour détectée.");
-            }
-        }
-
-        await db.Database.GetDbConnection().CloseAsync();
-
-        await db.Database.MigrateAsync();
-        Console.WriteLine("[DEPLOIEMENT] Base de données synchronisée avec succès !");
+        logger.LogInformation("[FINAMA INIT] Migrations et seeding terminés avec succès.");
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"[DEPLOIEMENT CRASH] Erreur critique : {ex.Message}");
+        logger.LogError(ex, "[FINAMA INIT ERROR] Une erreur est survenue lors de la migration ou du seeding.");
     }
 }
 

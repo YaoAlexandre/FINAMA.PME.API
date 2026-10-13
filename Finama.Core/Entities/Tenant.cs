@@ -17,6 +17,11 @@ public class Tenant : BaseEntity
     public bool AssujettTVA { get; set; } = true;
     public string PlanComptableCode { get; set; } = "OHADA";
 
+    // 🔹 Propriétés requises à ajouter :
+    public bool Actif { get; set; } = true;
+
+    public DateTime DateCreation { get; set; } = DateTime.UtcNow;
+
     // ─── Abonnement ───────────────────────────────────────────────────────────
     public PlanAbonnement Plan { get; set; } = PlanAbonnement.Trial;
     public DateTime? AbonnementExpireAt { get; set; }
@@ -41,6 +46,26 @@ public class Tenant : BaseEntity
         DeviseBase = Pays.DeviseCode;
         TauxTVA = Pays.TauxTVAStandard;
     }
+
+    /// <summary>
+    /// Indique si l'entreprise dispose d'un accès valide (non expiré et actif).
+    /// </summary>
+    public bool HasActiveSubscription => EstActif &&
+        (!AbonnementExpireAt.HasValue || AbonnementExpireAt.Value >= DateTime.UtcNow);
+
+    /// <summary>
+    /// Active ou renouvelle l'abonnement pour une durée donnée en mois.
+    /// </summary>
+    public void RenouvelerAbonnement(PlanAbonnement nouveauPlan, int mois)
+    {
+        Plan = nouveauPlan;
+        var dateBase = (AbonnementExpireAt.HasValue && AbonnementExpireAt.Value > DateTime.UtcNow)
+            ? AbonnementExpireAt.Value
+            : DateTime.UtcNow;
+
+        AbonnementExpireAt = dateBase.AddMonths(mois);
+        EstActif = true;
+    }
 }
 
 public enum PlanAbonnement
@@ -49,4 +74,9 @@ public enum PlanAbonnement
     Starter = 1,
     Pro = 2,
     Business = 3,
+}
+
+public static class AbonnementConstants
+{
+    public const int DureeEssaiJours = 30;
 }

@@ -2,8 +2,8 @@
 <!-- https://go.microsoft.com/fwlink/?LinkID=208121. -->
 <Project>
   <PropertyGroup>
-    <_PublishTargetUrl>C:\Users\HP\source\repos\Finama\Finama.API\bin\Release\net9.0\publish\</_PublishTargetUrl>
-    <History>True|2026-05-16T20:43:41.0475662Z||;True|2026-05-16T21:15:06.1763503+01:00||;True|2026-05-16T21:03:00.2809891+01:00||;True|2026-05-16T16:29:39.2268710+01:00||;True|2026-05-16T15:30:16.0765268+01:00||;True|2026-05-16T14:56:21.8692975+01:00||;</History>
+    <_PublishTargetUrl>D:\source\repos\Finama\Finama.API\bin\Release\net9.0\publish\</_PublishTargetUrl>
+    <History>True|2026-10-12T15:09:57.8303049Z||;True|2026-10-04T20:40:08.2091510+00:00||;True|2026-09-06T12:04:49.0672511+00:00||;True|2026-09-06T10:14:17.7799199+00:00||;True|2026-09-05T16:37:09.9891060+00:00||;True|2026-09-05T14:15:49.7390048+00:00||;True|2026-05-16T20:43:41.0475662+00:00||;True|2026-05-16T20:15:06.1763503+00:00||;True|2026-05-16T20:03:00.2809891+00:00||;True|2026-05-16T15:29:39.2268710+00:00||;True|2026-05-16T14:30:16.0765268+00:00||;True|2026-05-16T13:56:21.8692975+00:00||;</History>
     <LastFailureDetails />
   </PropertyGroup>
 </Project>

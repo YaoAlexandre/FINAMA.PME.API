@@ -28,7 +28,8 @@ public record AuthResponse(
     string DeviseSymbole,
     decimal TauxTVA,
     bool RequiresOtp,
-    string? Message
+    string? Message,
+    bool DoitChangerMotDePasse
 );
 
 public record RefreshTokenRequest(
@@ -37,3 +38,21 @@ public record RefreshTokenRequest(
 );
 
 public record VerifyOtpRequest(string Email, string CodeOtp);
+
+public class ChangerMotDePasseRequest
+{
+    public string AncienMotDePasseOuCode { get; set; } = string.Empty;
+    public string NouveauMotDePasse { get; set; } = string.Empty;
+}
+
+public class AuthResult
+{
+    public bool IsSuccess { get; set; }
+    public string Message { get; set; } = string.Empty;
+
+    public static AuthResult Success(string message = "Opération réussie.")
+        => new() { IsSuccess = true, Message = message };
+
+    public static AuthResult Failure(string message)
+        => new() { IsSuccess = false, Message = message };
+}

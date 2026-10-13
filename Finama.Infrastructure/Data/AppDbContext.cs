@@ -32,6 +32,8 @@ public class AppDbContext : DbContext
     public DbSet<Devis> Devis => Set<Devis>();
     public DbSet<LigneDevis> LignesDevis => Set<LigneDevis>();
 
+    public DbSet<DemandeAcces> DemandesAcces { get; set; }
+
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

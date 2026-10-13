@@ -17,16 +17,16 @@ namespace Finama.Infrastructure.Migrations
                 name: "Devises",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    Code = table.Column<string>(type: "character varying(3)", maxLength: 3, nullable: false),
-                    Symbole = table.Column<string>(type: "character varying(10)", maxLength: 10, nullable: false),
-                    Libelle = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
-                    TauxBaseDollar = table.Column<decimal>(type: "numeric(18,4)", nullable: false),
-                    DateMiseAJour = table.Column<DateTime>(type: "timestamp without time zone", nullable: false),
-                    EstActive = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: false),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false)
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    Code = table.Column<string>(type: "nvarchar(3)", maxLength: 3, nullable: false),
+                    Symbole = table.Column<string>(type: "nvarchar(10)", maxLength: 10, nullable: false),
+                    Libelle = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
+                    TauxBaseDollar = table.Column<decimal>(type: "decimal(18,4)", nullable: false),
+                    DateMiseAJour = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    EstActive = table.Column<bool>(type: "bit", nullable: false, defaultValue: true),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -37,18 +37,18 @@ namespace Finama.Infrastructure.Migrations
                 name: "Pays",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    Nom = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
-                    CodeISO = table.Column<string>(type: "character varying(2)", maxLength: 2, nullable: false),
-                    DeviseCode = table.Column<string>(type: "character varying(3)", maxLength: 3, nullable: false),
-                    DeviseSymbole = table.Column<string>(type: "character varying(10)", maxLength: 10, nullable: false),
-                    TauxTVAStandard = table.Column<decimal>(type: "numeric(5,2)", nullable: false),
-                    CodeFiscal = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
-                    Langue = table.Column<string>(type: "character varying(2)", maxLength: 2, nullable: false),
-                    EstActif = table.Column<bool>(type: "boolean", nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: false),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false)
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    Nom = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
+                    CodeISO = table.Column<string>(type: "nvarchar(2)", maxLength: 2, nullable: false),
+                    DeviseCode = table.Column<string>(type: "nvarchar(3)", maxLength: 3, nullable: false),
+                    DeviseSymbole = table.Column<string>(type: "nvarchar(10)", maxLength: 10, nullable: false),
+                    TauxTVAStandard = table.Column<decimal>(type: "decimal(5,2)", nullable: false),
+                    CodeFiscal = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    Langue = table.Column<string>(type: "nvarchar(2)", maxLength: 2, nullable: false),
+                    EstActif = table.Column<bool>(type: "bit", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -59,27 +59,27 @@ namespace Finama.Infrastructure.Migrations
                 name: "Tenants",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    Nom = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
-                    SlugUnique = table.Column<string>(type: "text", nullable: false),
-                    NumeroFiscal = table.Column<string>(type: "text", nullable: true),
-                    Adresse = table.Column<string>(type: "text", nullable: true),
-                    Telephone = table.Column<string>(type: "text", nullable: true),
-                    Email = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
-                    PaysId = table.Column<Guid>(type: "uuid", nullable: false),
-                    DeviseBase = table.Column<string>(type: "character varying(3)", maxLength: 3, nullable: false),
-                    TauxTVA = table.Column<decimal>(type: "numeric(5,2)", nullable: false),
-                    AssujettTVA = table.Column<bool>(type: "boolean", nullable: false),
-                    PlanComptableCode = table.Column<string>(type: "text", nullable: false),
-                    Plan = table.Column<int>(type: "integer", nullable: false),
-                    AbonnementExpireAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
-                    EstActif = table.Column<bool>(type: "boolean", nullable: false),
-                    BanqueNom = table.Column<string>(type: "text", nullable: true),
-                    BanqueBIC = table.Column<string>(type: "text", nullable: true),
-                    BanqueRIB = table.Column<string>(type: "text", nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: false),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false)
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    Nom = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
+                    SlugUnique = table.Column<string>(type: "nvarchar(450)", nullable: false),
+                    NumeroFiscal = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Adresse = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Telephone = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Email = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
+                    PaysId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    DeviseBase = table.Column<string>(type: "nvarchar(3)", maxLength: 3, nullable: false),
+                    TauxTVA = table.Column<decimal>(type: "decimal(5,2)", nullable: false),
+                    AssujettTVA = table.Column<bool>(type: "bit", nullable: false),
+                    PlanComptableCode = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    Plan = table.Column<int>(type: "int", nullable: false),
+                    AbonnementExpireAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    EstActif = table.Column<bool>(type: "bit", nullable: false),
+                    BanqueNom = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    BanqueBIC = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    BanqueRIB = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -95,13 +95,13 @@ namespace Finama.Infrastructure.Migrations
                 name: "ClassesComptables",
                 columns: table => new
                 {
-                    TenantId = table.Column<Guid>(type: "uuid", nullable: false),
-                    Numero = table.Column<int>(type: "integer", nullable: false),
-                    Libelle = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: false),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false)
+                    TenantId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    Numero = table.Column<int>(type: "int", nullable: false),
+                    Libelle = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -117,18 +117,18 @@ namespace Finama.Infrastructure.Migrations
                 name: "CompteComptables",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    Numero = table.Column<string>(type: "character varying(10)", maxLength: 10, nullable: false),
-                    Libelle = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
-                    Classe = table.Column<int>(type: "integer", nullable: false),
-                    Type = table.Column<string>(type: "text", nullable: false),
-                    EstSysteme = table.Column<bool>(type: "boolean", nullable: false),
-                    EstActif = table.Column<bool>(type: "boolean", nullable: false),
-                    CompteParentId = table.Column<Guid>(type: "uuid", nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: false),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false),
-                    TenantId = table.Column<Guid>(type: "uuid", nullable: false)
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    Numero = table.Column<string>(type: "nvarchar(10)", maxLength: 10, nullable: false),
+                    Libelle = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
+                    Classe = table.Column<int>(type: "int", nullable: false),
+                    Type = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    EstSysteme = table.Column<bool>(type: "bit", nullable: false),
+                    EstActif = table.Column<bool>(type: "bit", nullable: false),
+                    CompteParentId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uniqueidentifier", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -149,16 +149,16 @@ namespace Finama.Infrastructure.Migrations
                 name: "Exercices",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    Annee = table.Column<int>(type: "integer", nullable: false),
-                    DateDebut = table.Column<DateTime>(type: "timestamp without time zone", nullable: false),
-                    DateFin = table.Column<DateTime>(type: "timestamp without time zone", nullable: false),
-                    EstCloture = table.Column<bool>(type: "boolean", nullable: false),
-                    ClotureLe = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: false),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false),
-                    TenantId = table.Column<Guid>(type: "uuid", nullable: false)
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    Annee = table.Column<int>(type: "int", nullable: false),
+                    DateDebut = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    DateFin = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    EstCloture = table.Column<bool>(type: "bit", nullable: false),
+                    ClotureLe = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uniqueidentifier", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -174,23 +174,23 @@ namespace Finama.Infrastructure.Migrations
                 name: "Utilisateurs",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    Nom = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
-                    Prenom = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
-                    Email = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
-                    MotDePasseHash = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
-                    Role = table.Column<int>(type: "integer", nullable: false),
-                    EstActif = table.Column<bool>(type: "boolean", nullable: false),
-                    DerniereConnexionAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
-                    RefreshToken = table.Column<string>(type: "text", nullable: true),
-                    RefreshTokenExpireAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
-                    OtpCode = table.Column<string>(type: "text", nullable: true),
-                    OtpExpireAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
-                    IsOtpValidated = table.Column<bool>(type: "boolean", nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: false),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false),
-                    TenantId = table.Column<Guid>(type: "uuid", nullable: false)
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    Nom = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
+                    Prenom = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
+                    Email = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
+                    MotDePasseHash = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
+                    Role = table.Column<int>(type: "int", nullable: false),
+                    EstActif = table.Column<bool>(type: "bit", nullable: false),
+                    DerniereConnexionAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    RefreshToken = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    RefreshTokenExpireAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    OtpCode = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    OtpExpireAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    IsOtpValidated = table.Column<bool>(type: "bit", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uniqueidentifier", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -206,21 +206,21 @@ namespace Finama.Infrastructure.Migrations
                 name: "Tiers",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    Code = table.Column<string>(type: "text", nullable: false),
-                    Nom = table.Column<string>(type: "text", nullable: false),
-                    Type = table.Column<int>(type: "integer", nullable: false),
-                    NINEA = table.Column<string>(type: "text", nullable: true),
-                    Adresse = table.Column<string>(type: "text", nullable: true),
-                    Telephone = table.Column<string>(type: "text", nullable: true),
-                    Email = table.Column<string>(type: "text", nullable: true),
-                    Devise = table.Column<string>(type: "text", nullable: true),
-                    CompteComptableId = table.Column<Guid>(type: "uuid", nullable: true),
-                    EstActif = table.Column<bool>(type: "boolean", nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: false),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false),
-                    TenantId = table.Column<Guid>(type: "uuid", nullable: false)
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    Code = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    Nom = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    Type = table.Column<int>(type: "int", nullable: false),
+                    NINEA = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Adresse = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Telephone = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Email = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Devise = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    CompteComptableId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    EstActif = table.Column<bool>(type: "bit", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uniqueidentifier", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -241,13 +241,13 @@ namespace Finama.Infrastructure.Migrations
                 name: "AppareilsConfiance",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    UtilisateurId = table.Column<Guid>(type: "uuid", nullable: false),
-                    DeviceId = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
-                    DateDerniereValidation = table.Column<DateTime>(type: "timestamp without time zone", nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: false),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false)
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    UtilisateurId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    DeviceId = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
+                    DateDerniereValidation = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -263,19 +263,19 @@ namespace Finama.Infrastructure.Migrations
                 name: "Devis",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    Numero = table.Column<string>(type: "character varying(30)", maxLength: 30, nullable: false),
-                    Libelle = table.Column<string>(type: "character varying(300)", maxLength: 300, nullable: false),
-                    DateCreation = table.Column<DateTime>(type: "timestamp without time zone", nullable: false),
-                    DateExpiration = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
-                    Statut = table.Column<int>(type: "integer", nullable: false),
-                    TiersId = table.Column<Guid>(type: "uuid", nullable: false),
-                    CreePar = table.Column<Guid>(type: "uuid", nullable: false),
-                    Notes = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: false),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false),
-                    TenantId = table.Column<Guid>(type: "uuid", nullable: false)
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    Numero = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: false),
+                    Libelle = table.Column<string>(type: "nvarchar(300)", maxLength: 300, nullable: false),
+                    DateCreation = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    DateExpiration = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    Statut = table.Column<int>(type: "int", nullable: false),
+                    TiersId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    CreePar = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    Notes = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uniqueidentifier", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -296,23 +296,23 @@ namespace Finama.Infrastructure.Migrations
                 name: "Factures",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    Numero = table.Column<string>(type: "character varying(30)", maxLength: 30, nullable: false),
-                    Type = table.Column<string>(type: "text", nullable: false),
-                    DateFacture = table.Column<DateTime>(type: "timestamp without time zone", nullable: false),
-                    DateEcheance = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
-                    Statut = table.Column<int>(type: "integer", nullable: false),
-                    TiersId = table.Column<Guid>(type: "uuid", nullable: false),
-                    Devise = table.Column<string>(type: "text", nullable: false),
-                    TotalHT = table.Column<decimal>(type: "numeric(18,2)", nullable: false),
-                    TotalTVA = table.Column<decimal>(type: "numeric(18,2)", nullable: false),
-                    TotalTTC = table.Column<decimal>(type: "numeric(18,2)", nullable: false),
-                    MontantRegle = table.Column<decimal>(type: "numeric(18,2)", nullable: false),
-                    Notes = table.Column<string>(type: "text", nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: false),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false),
-                    TenantId = table.Column<Guid>(type: "uuid", nullable: false)
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    Numero = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: false),
+                    Type = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    DateFacture = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    DateEcheance = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    Statut = table.Column<int>(type: "int", nullable: false),
+                    TiersId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    Devise = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    TotalHT = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    TotalTVA = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    TotalTTC = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    MontantRegle = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    Notes = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uniqueidentifier", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -333,15 +333,15 @@ namespace Finama.Infrastructure.Migrations
                 name: "LignesDevis",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    DevisId = table.Column<Guid>(type: "uuid", nullable: false),
-                    Designation = table.Column<string>(type: "text", nullable: false),
-                    Quantite = table.Column<decimal>(type: "numeric", nullable: false),
-                    PrixUnitaireHT = table.Column<decimal>(type: "numeric", nullable: false),
-                    TauxTVA = table.Column<decimal>(type: "numeric", nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: false),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false)
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    DevisId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    Designation = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    Quantite = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    PrixUnitaireHT = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    TauxTVA = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -357,19 +357,19 @@ namespace Finama.Infrastructure.Migrations
                 name: "Ecritures",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    Reference = table.Column<string>(type: "character varying(30)", maxLength: 30, nullable: false),
-                    DateEcriture = table.Column<DateTime>(type: "timestamp without time zone", nullable: false),
-                    Libelle = table.Column<string>(type: "character varying(300)", maxLength: 300, nullable: false),
-                    Journal = table.Column<string>(type: "character varying(5)", maxLength: 5, nullable: false),
-                    Statut = table.Column<int>(type: "integer", nullable: false),
-                    ExerciceId = table.Column<Guid>(type: "uuid", nullable: false),
-                    FactureId = table.Column<Guid>(type: "uuid", nullable: true),
-                    UtilisateurId = table.Column<Guid>(type: "uuid", nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: false),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false),
-                    TenantId = table.Column<Guid>(type: "uuid", nullable: false)
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    Reference = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: false),
+                    DateEcriture = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    Libelle = table.Column<string>(type: "nvarchar(300)", maxLength: 300, nullable: false),
+                    Journal = table.Column<string>(type: "nvarchar(5)", maxLength: 5, nullable: false),
+                    Statut = table.Column<int>(type: "int", nullable: false),
+                    ExerciceId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    FactureId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    UtilisateurId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uniqueidentifier", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -400,17 +400,17 @@ namespace Finama.Infrastructure.Migrations
                 name: "LignesFacture",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    FactureId = table.Column<Guid>(type: "uuid", nullable: false),
-                    Description = table.Column<string>(type: "text", nullable: false),
-                    Quantite = table.Column<decimal>(type: "numeric(18,4)", nullable: false),
-                    PrixUnitaireHT = table.Column<decimal>(type: "numeric(18,2)", nullable: false),
-                    TauxTVA = table.Column<decimal>(type: "numeric(5,2)", nullable: false),
-                    CompteProduitsId = table.Column<Guid>(type: "uuid", nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: false),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false),
-                    TenantId = table.Column<Guid>(type: "uuid", nullable: false)
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    FactureId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    Description = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    Quantite = table.Column<decimal>(type: "decimal(18,4)", nullable: false),
+                    PrixUnitaireHT = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    TauxTVA = table.Column<decimal>(type: "decimal(5,2)", nullable: false),
+                    CompteProduitsId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uniqueidentifier", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -436,20 +436,20 @@ namespace Finama.Infrastructure.Migrations
                 name: "LignesEcriture",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    EcritureId = table.Column<Guid>(type: "uuid", nullable: false),
-                    CompteId = table.Column<Guid>(type: "uuid", nullable: false),
-                    TiersId = table.Column<Guid>(type: "uuid", nullable: true),
-                    Libelle = table.Column<string>(type: "text", nullable: true),
-                    Debit = table.Column<decimal>(type: "numeric(18,2)", nullable: false),
-                    Credit = table.Column<decimal>(type: "numeric(18,2)", nullable: false),
-                    Devise = table.Column<string>(type: "character varying(3)", maxLength: 3, nullable: false),
-                    TauxChange = table.Column<decimal>(type: "numeric(18,6)", nullable: true),
-                    MontantDeviseBase = table.Column<decimal>(type: "numeric(18,2)", nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: false),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false),
-                    TenantId = table.Column<Guid>(type: "uuid", nullable: false)
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    EcritureId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    CompteId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    TiersId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    Libelle = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Debit = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    Credit = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    Devise = table.Column<string>(type: "nvarchar(3)", maxLength: 3, nullable: false),
+                    TauxChange = table.Column<decimal>(type: "decimal(18,6)", nullable: true),
+                    MontantDeviseBase = table.Column<decimal>(type: "decimal(18,2)", nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uniqueidentifier", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -481,11 +481,11 @@ namespace Finama.Infrastructure.Migrations
                 columns: new[] { "Id", "Code", "CreatedAt", "DateMiseAJour", "EstActive", "IsDeleted", "Libelle", "Symbole", "TauxBaseDollar", "UpdatedAt" },
                 values: new object[,]
                 {
-                    { new Guid("11111111-1111-1111-1111-111111111111"), "USD", new DateTime(2026, 6, 14, 15, 8, 26, 453, DateTimeKind.Utc).AddTicks(3405), new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local), true, false, "Dollar américain", "$", 1.0000m, null },
-                    { new Guid("22222222-2222-2222-2222-222222222222"), "XOF", new DateTime(2026, 6, 14, 15, 8, 26, 469, DateTimeKind.Utc).AddTicks(5853), new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local), true, false, "Franc CFA (BCEAO)", "FCFA", 615.0000m, null },
-                    { new Guid("33333333-3333-3333-3333-333333333333"), "EUR", new DateTime(2026, 6, 14, 15, 8, 26, 469, DateTimeKind.Utc).AddTicks(6036), new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local), true, false, "Euro", "€", 0.9200m, null },
-                    { new Guid("44444444-4444-4444-4444-444444444444"), "GHS", new DateTime(2026, 6, 14, 15, 8, 26, 469, DateTimeKind.Utc).AddTicks(6053), new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local), true, false, "Cedi ghanéen", "₵", 14.5000m, null },
-                    { new Guid("55555555-5555-5555-5555-555555555555"), "NGN", new DateTime(2026, 6, 14, 15, 8, 26, 469, DateTimeKind.Utc).AddTicks(6076), new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local), true, false, "Naira nigérian", "₦", 1490.0000m, null }
+                    { new Guid("11111111-1111-1111-1111-111111111111"), "USD", new DateTime(2026, 9, 5, 13, 59, 20, 786, DateTimeKind.Utc).AddTicks(7032), new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local), true, false, "Dollar américain", "$", 1.0000m, null },
+                    { new Guid("22222222-2222-2222-2222-222222222222"), "XOF", new DateTime(2026, 9, 5, 13, 59, 20, 805, DateTimeKind.Utc).AddTicks(716), new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local), true, false, "Franc CFA (BCEAO)", "FCFA", 615.0000m, null },
+                    { new Guid("33333333-3333-3333-3333-333333333333"), "EUR", new DateTime(2026, 9, 5, 13, 59, 20, 805, DateTimeKind.Utc).AddTicks(885), new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local), true, false, "Euro", "€", 0.9200m, null },
+                    { new Guid("44444444-4444-4444-4444-444444444444"), "GHS", new DateTime(2026, 9, 5, 13, 59, 20, 805, DateTimeKind.Utc).AddTicks(898), new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local), true, false, "Cedi ghanéen", "₵", 14.5000m, null },
+                    { new Guid("55555555-5555-5555-5555-555555555555"), "NGN", new DateTime(2026, 9, 5, 13, 59, 20, 805, DateTimeKind.Utc).AddTicks(906), new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local), true, false, "Naira nigérian", "₦", 1490.0000m, null }
                 });
 
             migrationBuilder.InsertData(

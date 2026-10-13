@@ -5,6 +5,8 @@ using Finama.Infrastructure.Seeds;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Org.BouncyCastle.Asn1.Ocsp;
+using System.Security.Cryptography;
 
 namespace Finama.Infrastructure.Services;
 
@@ -15,6 +17,7 @@ public interface IAuthService
     Task<AuthResponse> VerifierOtpAsync(VerifyOtpRequest request);
     Task<AuthResponse> RefreshTokenAsync(RefreshTokenRequest request);
     Task LogoutAsync(Guid utilisateurId);
+    Task<AuthResult> DefinirNouveauMotDePasseAsync(Guid utilisateurId, ChangerMotDePasseRequest request);
 }
 
 public class AuthService : IAuthService
@@ -31,60 +34,67 @@ public class AuthService : IAuthService
         _jwt = jwt;
         _settings = options.Value;
         _emailService = emailService;
-        _httpContext = httpContext; 
+        _httpContext = httpContext;
     }
 
     public async Task<AuthResponse> LoginAsync(LoginRequest request)
     {
-        // 1. Recherche brute sans aucun filtre pour être sûr de trouver l'adresse email
-        //var utilisateur = await _db.Utilisateurs
-        //    .IgnoreQueryFilters()
-        //    .FirstOrDefaultAsync(u => u.Email.ToLower() == request.Email.ToLower().Trim());
+        var emailNormalise = request.Email.Trim().ToLower();
+
+        // 1. Recherche sécurisée de l'utilisateur avec son Tenant et Pays
         var utilisateur = await _db.Utilisateurs
             .IgnoreQueryFilters()
-            .Include(u => u.Tenant)
+            .Include(u => u.Tenant!)
                 .ThenInclude(t => t.Pays)
-            .FirstOrDefaultAsync(u => u.Email == request.Email.ToLower()
+            .FirstOrDefaultAsync(u => u.Email.ToLower() == emailNormalise
                                    && !u.IsDeleted
                                    && u.EstActif);
 
-        // LOG 2 : Est-ce qu'on l'a trouvé en base PostgreSQL ?
         if (utilisateur is null)
         {
-            Console.WriteLine($"[DIAGNOSTIC LOGIN] ÉCHEC : Aucun utilisateur trouvé pour l'email '{request.Email}'");
+            Console.WriteLine($"[DIAGNOSTIC LOGIN] ÉCHEC : Aucun utilisateur trouvé pour '{request.Email}'");
             throw new UnauthorizedAccessException("Email ou mot de passe incorrect.");
         }
 
-        Console.WriteLine($"[DIAGNOSTIC LOGIN] Utilisateur trouvé ! Nom: {utilisateur.Nom}, EstActif: {utilisateur.EstActif}");
-        Console.WriteLine($"[DIAGNOSTIC LOGIN] Hash en base: '{utilisateur.MotDePasseHash}'");
-
-        // Nettoyage et vérification BCrypt
+        // 2. Nettoyage du hash et vérification BCrypt
         string hashNettoye = utilisateur.MotDePasseHash.Trim();
         bool estValide = BCrypt.Net.BCrypt.Verify(request.MotDePasse, hashNettoye);
 
-        // LOG 3 : Est-ce que BCrypt valide le mot de passe ?
-        Console.WriteLine($"[DIAGNOSTIC LOGIN] Résultat de la vérification BCrypt: {estValide}");
-
         if (!estValide)
-            throw new UnauthorizedAccessException("Email ou mot de passe incorrect.");
-
-        // 3. Vérification des statuts du compte après validation du mot de passe
-        if (utilisateur.IsDeleted || !utilisateur.EstActif)
-            throw new UnauthorizedAccessException("Ce compte utilisateur est désactivé ou supprimé.");
-
-        if (utilisateur.OtpExpireAt > DateTime.UtcNow.AddMinutes(8)) // Si le code précédent est encore valide depuis moins de 2 min
         {
-            throw new InvalidOperationException("Veuillez patienter avant de demander un nouveau code.");
+            Console.WriteLine($"[DIAGNOSTIC LOGIN] ÉCHEC : Mot de passe invalide pour '{request.Email}'");
+            throw new UnauthorizedAccessException("Email ou mot de passe incorrect.");
         }
 
-        // 🛡️ Récupération sécurisée du DeviceId
+        // 3. Vérification du statut de l'entreprise (Uniquement si l'utilisateur appartient à un Tenant)
+        if (utilisateur.Role != RoleUtilisateur.SuperAdmin)
+        {
+            var tenant = utilisateur.Tenant;
+            if (tenant is null || !tenant.EstActif)
+            {
+                throw new UnauthorizedAccessException("Le compte de votre entreprise est désactivé ou suspendu.");
+            }
+
+            if (tenant.AbonnementExpireAt.HasValue && tenant.AbonnementExpireAt.Value < DateTime.UtcNow)
+            {
+                throw new InvalidOperationException("Votre abonnement Finama a expiré. Veuillez contacter votre administrateur.");
+            }
+        }
+
+        // 4. Protection contre le spam OTP (Anti-flood)
+        if (utilisateur.OtpExpireAt.HasValue && utilisateur.OtpExpireAt > DateTime.UtcNow.AddMinutes(8))
+        {
+            throw new InvalidOperationException("Un code a récemment été envoyé. Veuillez patienter avant de demander un nouveau code.");
+        }
+
+        // 5. Récupération et vérification du DeviceId (Appareils de confiance)
         var deviceId = _httpContext.HttpContext?.Request.Headers["X-Device-Id"].ToString();
 
         if (!string.IsNullOrEmpty(deviceId))
         {
             var estDejaValide = await _db.AppareilsConfiance
                 .AnyAsync(a => a.UtilisateurId == utilisateur.Id
-                            && a.DeviceId == deviceId.ToString()
+                            && a.DeviceId == deviceId
                             && a.DateDerniereValidation > DateTime.UtcNow.AddDays(-30));
 
             if (estDejaValide)
@@ -93,12 +103,10 @@ public class AuthService : IAuthService
             }
         }
 
-        // ─── 🛡️ ÉTAPE OTP COUPLÉE ICI (Le mot de passe est valide) ───
-
+        // 6. Génération du code OTP (Si appareil non reconnu)
         var random = new Random();
-        string codeOtp = random.Next(100000, 999999).ToString();
+        string codeOtp = RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
 
-        // Enregistrement de l'OTP en base (Valable 10 minutes)
         utilisateur.OtpCode = codeOtp;
         utilisateur.OtpExpireAt = DateTime.UtcNow.AddMinutes(10);
         utilisateur.IsOtpValidated = false;
@@ -106,87 +114,92 @@ public class AuthService : IAuthService
         _db.Utilisateurs.Update(utilisateur);
         await _db.SaveChangesAsync();
 
-        // 📧 ICI : Appel de ton service d'envoi d'email
-        // await _emailService.SendOtpEmailAsync(utilisateur.Email, codeOtp);
-        Console.WriteLine($"[OTP DEBUG] Code généré pour {utilisateur.Email} : {codeOtp}");
-
-        // 📧 Envoi réel du mail de validation
-        // 📧 Envoi asynchrone en tâche de fond (Fire-and-Forget)
-        // La requête HTTP se termine immédiatement et l'utilisateur reçoit instantanément son UI de validation
+        // 7. Envoi du mail de manière asynchrone (Fire-and-Forget)
         _ = Task.Run(async () =>
         {
             try
             {
-                await _emailService.SendOtpEmailByMailKitAsync(utilisateur.Email, codeOtp);
+                await _emailService.SendOtpEmailByResendAsync(utilisateur.Email, codeOtp);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[CRITICAL OTP EMAIL ERROR] Impossible d'envoyer le mail à {utilisateur.Email}. Erreur : {ex.ToString()}");
+                Console.WriteLine($"[CRITICAL OTP EMAIL ERROR] Échec de l'envoi à {utilisateur.Email} : {ex.Message}");
             }
         });
 
-        // On retourne une réponse qui bloque l'accès aux tokens tant que l'OTP n'est pas fourni
         return new AuthResponse(
-        AccessToken: string.Empty,
-        RefreshToken: string.Empty,
-        ExpireAt: DateTime.UtcNow,
-        NomUtilisateur: $"{utilisateur.Prenom} {utilisateur.Nom}",
-        Email: utilisateur.Email,
-        Role: utilisateur.Role.ToString(),
-        TenantId: Guid.Empty,
-        NomEntreprise: string.Empty,
-        Pays: string.Empty,
-        Devise: string.Empty,
-        DeviseSymbole: string.Empty,
-        TauxTVA: 0,
-        RequiresOtp: true,
-        Message: "Un code de vérification a été envoyé sur votre boîte mail."
-    );
+            AccessToken: string.Empty,
+            RefreshToken: string.Empty,
+            ExpireAt: DateTime.UtcNow,
+            NomUtilisateur: $"{utilisateur.Prenom} {utilisateur.Nom}",
+            Email: utilisateur.Email,
+            Role: utilisateur.Role.ToString(),
+            TenantId: Guid.Empty,
+            NomEntreprise: string.Empty,
+            Pays: string.Empty,
+            Devise: string.Empty,
+            DeviseSymbole: string.Empty,
+            TauxTVA: 0,
+            RequiresOtp: true,
+            Message: "Un code de vérification a été envoyé sur votre boîte mail.",
+            utilisateur.DoitChangerMotDePasse
+        );
     }
 
     public async Task<AuthResponse> VerifierOtpAsync(VerifyOtpRequest request)
     {
-        // 1. Recherche brute de l'utilisateur pour valider son OTP
+        var emailNormalise = request.Email.Trim().ToLower();
+
+        // 1. Recherche de l'utilisateur complet avec son Tenant
         var utilisateur = await _db.Utilisateurs
             .IgnoreQueryFilters()
-            .FirstOrDefaultAsync(u => u.Email.ToLower() == request.Email.ToLower().Trim());
-
-        var utilisateurComplet = await _db.Utilisateurs
-            .IgnoreQueryFilters()
-            .Include(u => u.Tenant)
+            .Include(u => u.Tenant!)
                 .ThenInclude(t => t.Pays)
-            .FirstOrDefaultAsync(u => u.Id == utilisateur.Id);
-
-        if (utilisateurComplet?.Tenant is null || !utilisateurComplet.Tenant.EstActif)
-            throw new UnauthorizedAccessException("Accès refusé : Entreprise suspendue.");
+            .FirstOrDefaultAsync(u => u.Email.ToLower() == emailNormalise);
 
         if (utilisateur is null)
             throw new UnauthorizedAccessException("Demande invalide.");
 
-        // 2. Contrôles de sécurité sur l'OTP
+        if (utilisateur.Role != RoleUtilisateur.SuperAdmin)
+        {
+            var tenant = utilisateur.Tenant;
+            if (tenant is null || !tenant.EstActif)
+                throw new UnauthorizedAccessException("Accès refusé : Entreprise suspendue.");
+
+            if (tenant.AbonnementExpireAt.HasValue && tenant.AbonnementExpireAt.Value < DateTime.UtcNow)
+                throw new InvalidOperationException("Accès refusé : L'abonnement de votre entreprise a expiré.");
+        }
+
+        // 2. Contrôles sur le code OTP
         if (string.IsNullOrEmpty(utilisateur.OtpCode) || utilisateur.OtpCode != request.CodeOtp)
             throw new UnauthorizedAccessException("Code OTP incorrect.");
 
-        if (utilisateur.OtpExpireAt < DateTime.UtcNow)
+        if (!utilisateur.OtpExpireAt.HasValue || utilisateur.OtpExpireAt < DateTime.UtcNow)
             throw new UnauthorizedAccessException("Le code OTP a expiré. Veuillez en générer un nouveau.");
 
-        if (utilisateur is null || utilisateur.OtpCode != request.CodeOtp || utilisateur.OtpExpireAt < DateTime.UtcNow)
-            throw new UnauthorizedAccessException("Code invalide ou expiré.");
-
-        // 💾 ENREGISTREMENT DE LA CONFIANCE ICI
+        // 3. Enregistrement de la confiance du périphérique
         var deviceId = _httpContext.HttpContext?.Request.Headers["X-Device-Id"].ToString();
         if (!string.IsNullOrEmpty(deviceId))
         {
             var appareil = await _db.AppareilsConfiance
                 .FirstOrDefaultAsync(a => a.UtilisateurId == utilisateur.Id && a.DeviceId == deviceId);
 
-            if (appareil == null)
-                _db.AppareilsConfiance.Add(new AppareilConfiance { UtilisateurId = utilisateur.Id, DeviceId = deviceId, DateDerniereValidation = DateTime.UtcNow });
+            if (appareil is null)
+            {
+                _db.AppareilsConfiance.Add(new AppareilConfiance
+                {
+                    UtilisateurId = utilisateur.Id,
+                    DeviceId = deviceId,
+                    DateDerniereValidation = DateTime.UtcNow
+                });
+            }
             else
+            {
                 appareil.DateDerniereValidation = DateTime.UtcNow;
+            }
         }
 
-        // 3. OTP Valide ! On réinitialise les champs de sécurité
+        // 4. Réinitialisation des champs OTP
         utilisateur.OtpCode = null;
         utilisateur.OtpExpireAt = null;
         utilisateur.IsOtpValidated = true;
@@ -194,26 +207,19 @@ public class AuthService : IAuthService
         _db.Utilisateurs.Update(utilisateur);
         await _db.SaveChangesAsync();
 
-        // 4. Chargement explicite du Tenant et du Pays pour éviter les jointures vides sous Postgres
-        await _db.Entry(utilisateur).Reference(u => u.Tenant).LoadAsync();
-
-        if (utilisateur.Tenant is null)
-            throw new UnauthorizedAccessException("Erreur : Aucun compte entreprise associé.");
-
-        await _db.Entry(utilisateur.Tenant).Reference(t => t.Pays).LoadAsync();
-
-        if (!utilisateur.Tenant.EstActif)
-            throw new UnauthorizedAccessException("Ce compte entreprise est suspendu.");
-
-        // 5. Initialisation tardive (Lazy-Init) de ton plan comptable SYSCOHADA
-        var tenantId = utilisateur.TenantId;
-        var aDesClasses = await _db.ClassesComptables
-            .IgnoreQueryFilters()
-            .AnyAsync(c => c.TenantId == tenantId);
-
-        if (!aDesClasses)
+        // 5. Initialisation automatique du plan comptable et de l'exercice (si applicatif PME)
+        if (utilisateur.Tenant != null)
         {
-            var classesParDefaut = new List<ClasseComptable>
+            var tenantId = utilisateur.Tenant.Id;
+
+            // --- A. Plan comptable ---
+            var aDesClasses = await _db.ClassesComptables
+                .IgnoreQueryFilters()
+                .AnyAsync(c => c.TenantId == tenantId);
+
+            if (!aDesClasses)
+            {
+                var classesParDefaut = new List<ClasseComptable>
         {
             new() { Numero = 1, Libelle = "Capitaux", TenantId = tenantId },
             new() { Numero = 2, Libelle = "Immobilisations", TenantId = tenantId },
@@ -224,173 +230,131 @@ public class AuthService : IAuthService
             new() { Numero = 7, Libelle = "Produits", TenantId = tenantId }
         };
 
-            await _db.ClassesComptables.AddRangeAsync(classesParDefaut);
+                await _db.ClassesComptables.AddRangeAsync(classesParDefaut);
+            }
+
+            // --- B. Initialisation de l'exercice comptable courant ---
+            var anneeEnCours = DateTime.Today.Year;
+            var aUnExercice = await _db.Exercices
+                .IgnoreQueryFilters()
+                .AnyAsync(e => e.TenantId == tenantId && e.Annee == anneeEnCours);
+
+            if (!aUnExercice)
+            {
+                var nouvelExercice = new ExerciceComptable
+                {
+                    TenantId = tenantId,
+                    Annee = anneeEnCours,
+                    Libelle = $"Exercice {anneeEnCours}",
+                    DateDebut = new DateTime(anneeEnCours, 1, 1),
+                    DateFin = new DateTime(anneeEnCours, 12, 31),
+                    EstCloture = false
+                };
+
+                await _db.Exercices.AddAsync(nouvelExercice);
+            }
+
             await _db.SaveChangesAsync();
         }
 
-        // 6. Émission finale des jetons d'authentification (Connexion réussie)
         return await EmettreTokensAsync(utilisateur, utilisateur.Tenant);
     }
 
-    //public async Task<AuthResponse> LoginAsync(LoginRequest request)
-    //{
-    //    var utilisateur = await _db.Utilisateurs
-    //        .IgnoreQueryFilters()
-    //        .Include(u => u.Tenant)
-    //            .ThenInclude(t => t.Pays)
-    //        .FirstOrDefaultAsync(u => u.Email == request.Email.ToLower()
-    //                               && !u.IsDeleted
-    //                               && u.EstActif);
-
-    //    if (utilisateur is null || !BCrypt.Net.BCrypt.Verify(request.MotDePasse, utilisateur.MotDePasseHash))
-    //        throw new UnauthorizedAccessException("Email ou mot de passe incorrect.");
-
-    //    if (!utilisateur.Tenant.EstActif)
-    //        throw new UnauthorizedAccessException("Ce compte entreprise est suspendu.");
-
-    //    return await EmettreTokensAsync(utilisateur, utilisateur.Tenant);
-    //}
     public async Task<AuthResponse> RegisterTenantAsync(RegisterTenantRequest request)
     {
-        // 1. Vérifications initiales (Pays et Unicité de l'email)
+        var emailNormalise = request.Email.Trim().ToLower();
+
         var pays = await _db.Pays
             .FirstOrDefaultAsync(p => p.Id == request.PaysId && p.EstActif)
             ?? throw new KeyNotFoundException("Pays introuvable. Consultez GET /api/pays.");
 
         var emailExiste = await _db.Utilisateurs
             .IgnoreQueryFilters()
-            .AnyAsync(u => u.Email == request.Email.ToLower());
+            .AnyAsync(u => u.Email.ToLower() == emailNormalise);
 
         if (emailExiste)
             throw new InvalidOperationException("Cet email est déjà utilisé.");
 
-        // 2. Génération du slug d'entreprise
         var slug = GenererSlug(request.NomEntreprise);
         if (await _db.Tenants.AnyAsync(t => t.SlugUnique == slug))
             slug = $"{slug}-{Guid.NewGuid().ToString()[..4]}";
 
-        // 3. Création et affectation de l'entité Tenant
-        var tenant = new Tenant
+        // 1. Initialiser explicitement l'ID du Tenant
+        var tenantId = Guid.NewGuid();
+
+        using var transaction = await _db.Database.BeginTransactionAsync();
+
+        try
         {
-            Nom = request.NomEntreprise,
-            SlugUnique = slug,
-            Email = request.Email.ToLower(),
-            PaysId = pays.Id,
-            Pays = pays,
-            DeviseBase = pays.DeviseCode,   // XOF, STD, XAF...
-            TauxTVA = pays.TauxTVAStandard,
-            PlanComptableCode = "OHADA",
-            Plan = PlanAbonnement.Trial,
-            AbonnementExpireAt = DateTime.UtcNow.AddDays(14),
-            EstActif = true,
+            var tenant = new Tenant
+            {
+                Id = tenantId,
+                Nom = request.NomEntreprise,
+                SlugUnique = slug,
+                Email = emailNormalise,
+                PaysId = pays.Id,
+                Pays = pays,
+                DeviseBase = pays.DeviseCode,
+                TauxTVA = pays.TauxTVAStandard,
+                PlanComptableCode = "OHADA",
+                Plan = PlanAbonnement.Trial,
+                AbonnementExpireAt = DateTime.UtcNow.AddDays(AbonnementConstants.DureeEssaiJours),
+                EstActif = true,
+            };
+            _db.Tenants.Add(tenant);
+
+            // 2. Administrateur
+            var admin = new Utilisateur
+            {
+                TenantId = tenantId,
+                Nom = request.NomAdministrateur,
+                Prenom = request.PrenomAdministrateur,
+                Email = emailNormalise,
+                MotDePasseHash = BCrypt.Net.BCrypt.HashPassword(request.MotDePasse),
+                Role = RoleUtilisateur.AdminTenant,
+                EstActif = true,
+            };
+            _db.Utilisateurs.Add(admin);
+
+            // 3. Classes SYSCOHADA
+            var classesParDefaut = new List<ClasseComptable>
+        {
+            new() { Numero = 1, Libelle = "Capitaux", TenantId = tenantId },
+            new() { Numero = 2, Libelle = "Immobilisations", TenantId = tenantId },
+            new() { Numero = 3, Libelle = "Stocks", TenantId = tenantId },
+            new() { Numero = 4, Libelle = "Tiers", TenantId = tenantId },
+            new() { Numero = 5, Libelle = "Trésorerie", TenantId = tenantId },
+            new() { Numero = 6, Libelle = "Charges", TenantId = tenantId },
+            new() { Numero = 7, Libelle = "Produits", TenantId = tenantId }
         };
-        _db.Tenants.Add(tenant); // Génère le TenantId pour l'arbre d'entités EF
+            _db.ClassesComptables.AddRange(classesParDefaut);
 
-        // 4. Création de l'Administrateur du Tenant
-        var admin = new Utilisateur
+            // 4. Plan de comptes
+            _db.CompteComptables.AddRange(PlanComptableOhadaSeed.GenererPourTenant(tenantId));
+
+            // 5. Exercice comptable courant
+            var annee = DateTime.Today.Year;
+            _db.Exercices.Add(new ExerciceComptable
+            {
+                TenantId = tenantId,
+                Annee = annee,
+                Libelle = $"Exercice {annee}",
+                DateDebut = new DateTime(annee, 1, 1),
+                DateFin = new DateTime(annee, 12, 31),
+                EstCloture = false
+            });
+
+            await _db.SaveChangesAsync();
+            await transaction.CommitAsync();
+
+            return await EmettreTokensAsync(admin, tenant);
+        }
+        catch
         {
-            TenantId = tenant.Id,
-            Nom = request.NomAdministrateur,
-            Prenom = request.PrenomAdministrateur,
-            Email = request.Email.ToLower(),
-            MotDePasseHash = BCrypt.Net.BCrypt.HashPassword(request.MotDePasse),
-            Role = RoleUtilisateur.AdminTenant,
-            EstActif = true,
-        };
-        _db.Utilisateurs.Add(admin);
-
-        // 5. ─── AJOUT CRUCIAL : Initialisation Dynamique des Classes Comptables ───
-        var classesParDefaut = new List<ClasseComptable>
-    {
-        new() { Numero = 1, Libelle = "Capitaux", TenantId = tenant.Id },
-        new() { Numero = 2, Libelle = "Immobilisations", TenantId = tenant.Id },
-        new() { Numero = 3, Libelle = "Stocks", TenantId = tenant.Id },
-        new() { Numero = 4, Libelle = "Tiers", TenantId = tenant.Id },
-        new() { Numero = 5, Libelle = "Trésorerie", TenantId = tenant.Id },
-        new() { Numero = 6, Libelle = "Charges", TenantId = tenant.Id },
-        new() { Numero = 7, Libelle = "Produits", TenantId = tenant.Id }
-    };
-        _db.ClassesComptables.AddRange(classesParDefaut);
-
-        // 6. Génération des sous-comptes OHADA (Générés via ton Seed)
-        _db.CompteComptables.AddRange(PlanComptableOhadaSeed.GenererPourTenant(tenant.Id));
-
-        // 7. Initialisation du premier Exercice Comptable
-        var annee = DateTime.Today.Year;
-        _db.Exercices.Add(new ExerciceComptable
-        {
-            TenantId = tenant.Id,
-            Annee = annee,
-            DateDebut = new DateTime(annee, 1, 1),
-            DateFin = new DateTime(annee, 12, 31),
-        });
-
-        // 8. Sauvegarde atomique globale en BDD
-        await _db.SaveChangesAsync();
-
-        return await EmettreTokensAsync(admin, tenant);
+            await transaction.RollbackAsync();
+            throw;
+        }
     }
-    //public async Task<AuthResponse> RegisterTenantAsync(RegisterTenantRequest request)
-    //{
-    //    // Vérifier que le pays existe en BDD
-    //    var pays = await _db.Pays
-    //        .FirstOrDefaultAsync(p => p.Id == request.PaysId && p.EstActif)
-    //        ?? throw new KeyNotFoundException("Pays introuvable. Consultez GET /api/pays.");
-
-    //    var emailExiste = await _db.Utilisateurs
-    //        .IgnoreQueryFilters()
-    //        .AnyAsync(u => u.Email == request.Email.ToLower());
-
-    //    if (emailExiste)
-    //        throw new InvalidOperationException("Cet email est déjà utilisé.");
-
-    //    var slug = GenererSlug(request.NomEntreprise);
-    //    if (await _db.Tenants.AnyAsync(t => t.SlugUnique == slug))
-    //        slug = $"{slug}-{Guid.NewGuid().ToString()[..4]}";
-
-    //    // Créer le tenant — devise et TVA depuis la BDD
-    //    var tenant = new Tenant
-    //    {
-    //        Nom = request.NomEntreprise,
-    //        SlugUnique = slug,
-    //        Email = request.Email.ToLower(),
-    //        PaysId = pays.Id,
-    //        Pays = pays,
-    //        DeviseBase = pays.DeviseCode,   // XOF, STD, XAF...
-    //        TauxTVA = pays.TauxTVAStandard,
-    //        PlanComptableCode = "OHADA",
-    //        Plan = PlanAbonnement.Trial,
-    //        AbonnementExpireAt = DateTime.UtcNow.AddDays(14),
-    //        EstActif = true,
-    //    };
-    //    _db.Tenants.Add(tenant);
-
-    //    var admin = new Utilisateur
-    //    {
-    //        TenantId = tenant.Id,
-    //        Nom = request.NomAdministrateur,
-    //        Prenom = request.PrenomAdministrateur,
-    //        Email = request.Email.ToLower(),
-    //        MotDePasseHash = BCrypt.Net.BCrypt.HashPassword(request.MotDePasse),
-    //        Role = RoleUtilisateur.AdminTenant,
-    //        EstActif = true,
-    //    };
-    //    _db.Utilisateurs.Add(admin);
-
-    //    _db.CompteComptables.AddRange(PlanComptableOhadaSeed.GenererPourTenant(tenant.Id));
-
-    //    var annee = DateTime.Today.Year;
-    //    _db.Exercices.Add(new ExerciceComptable
-    //    {
-    //        TenantId = tenant.Id,
-    //        Annee = annee,
-    //        DateDebut = new DateTime(annee, 1, 1),
-    //        DateFin = new DateTime(annee, 12, 31),
-    //    });
-
-    //    await _db.SaveChangesAsync();
-    //    return await EmettreTokensAsync(admin, tenant);
-    //}
 
     public async Task<AuthResponse> RefreshTokenAsync(RefreshTokenRequest request)
     {
@@ -403,7 +367,7 @@ public class AuthService : IAuthService
 
         var utilisateur = await _db.Utilisateurs
             .IgnoreQueryFilters()
-            .Include(u => u.Tenant)
+            .Include(u => u.Tenant!)
                 .ThenInclude(t => t.Pays)
             .FirstOrDefaultAsync(u => u.Id == utilisateurId);
 
@@ -411,6 +375,12 @@ public class AuthService : IAuthService
             || utilisateur.RefreshToken != request.RefreshToken
             || utilisateur.RefreshTokenExpireAt < DateTime.UtcNow)
             throw new UnauthorizedAccessException("Refresh token expiré ou invalide.");
+
+        if (utilisateur.Role != RoleUtilisateur.SuperAdmin)
+        {
+            if (utilisateur.Tenant == null || !utilisateur.Tenant.EstActif || (utilisateur.Tenant.AbonnementExpireAt.HasValue && utilisateur.Tenant.AbonnementExpireAt.Value < DateTime.UtcNow))
+                throw new UnauthorizedAccessException("L'accès de votre entreprise a expiré.");
+        }
 
         return await EmettreTokensAsync(utilisateur, utilisateur.Tenant);
     }
@@ -429,7 +399,7 @@ public class AuthService : IAuthService
         }
     }
 
-    private async Task<AuthResponse> EmettreTokensAsync(Utilisateur utilisateur, Tenant tenant)
+    private async Task<AuthResponse> EmettreTokensAsync(Utilisateur utilisateur, Tenant? tenant)
     {
         var accessToken = _jwt.GenererAccessToken(utilisateur, tenant);
         var refreshToken = _jwt.GenererRefreshToken();
@@ -446,14 +416,15 @@ public class AuthService : IAuthService
             NomUtilisateur: $"{utilisateur.Prenom} {utilisateur.Nom}",
             Email: utilisateur.Email,
             Role: utilisateur.Role.ToString(),
-            TenantId: tenant.Id,
-            NomEntreprise: tenant.Nom,
-            Pays: tenant.Pays.Nom,
-            Devise: tenant.DeviseBase,
-            DeviseSymbole: tenant.Pays.DeviseSymbole,
-            TauxTVA: tenant.TauxTVA,
+            TenantId: tenant?.Id ?? Guid.Empty,
+            NomEntreprise: tenant?.Nom ?? "SaaS Admin",
+            Pays: tenant?.Pays?.Nom ?? "Global",
+            Devise: tenant?.DeviseBase ?? "XOF",
+            DeviseSymbole: tenant?.Pays?.DeviseSymbole ?? "FCFA",
+            TauxTVA: tenant?.TauxTVA ?? 0,
             RequiresOtp: false,
-            Message: null
+            Message: null,
+            utilisateur.DoitChangerMotDePasse
         );
     }
 
@@ -464,5 +435,24 @@ public class AuthService : IAuthService
             .Replace("à", "a").Replace("â", "a").Replace("ç", "c")
             .Replace("ô", "o").Replace("ù", "u").Replace("î", "i");
         return System.Text.RegularExpressions.Regex.Replace(slug, @"[^a-z0-9]+", "-").Trim('-');
+    }
+
+    public async Task<AuthResult> DefinirNouveauMotDePasseAsync(Guid utilisateurId, ChangerMotDePasseRequest request)
+    {
+        var utilisateur = await _db.Utilisateurs.FindAsync(utilisateurId);
+        if (utilisateur == null)
+            return AuthResult.Failure("Utilisateur introuvable.");
+
+        // Vérifier l'ancien mot de passe / code
+        if (!BCrypt.Net.BCrypt.Verify(request.AncienMotDePasseOuCode, utilisateur.MotDePasseHash))
+            return AuthResult.Failure("Le mot de passe temporaire est incorrect.");
+
+        // Mettre à jour le mot de passe
+        utilisateur.MotDePasseHash = BCrypt.Net.BCrypt.HashPassword(request.NouveauMotDePasse);
+        utilisateur.DoitChangerMotDePasse = false;
+
+        await _db.SaveChangesAsync();
+
+        return AuthResult.Success("Mot de passe mis à jour avec succès.");
     }
 }
