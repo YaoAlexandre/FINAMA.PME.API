@@ -2,6 +2,7 @@ using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
 using Finama.Core.DTOs;
+using Finama.Infrastructure.Data;
 
 namespace Finama.Infrastructure.Services;
 
@@ -19,9 +20,21 @@ public class FacturePdfService : IFacturePdfService
     private const string GrisBordure = "#E5E7EB";
     private const string GrisSoft = "#6B7280";
 
+    private readonly AppDbContext _db;
+    private readonly ITenantContext _tenant;
+
+    public FacturePdfService(AppDbContext db, ITenantContext tenant)
+    {
+        _db = db;
+        _tenant = tenant;
+    }
+
     public byte[] Generer(FactureDetailDto f)
     {
         QuestPDF.Settings.License = LicenseType.Community;
+
+        // Logo de l'entreprise (facultatif) : en tête de facture, à gauche du nom
+        var logo = LireLogo();
 
         return Document.Create(container =>
         {
@@ -36,6 +49,12 @@ public class FacturePdfService : IFacturePdfService
                     // ── En-tête ───────────────────────────────────────────
                     col.Item().Row(row =>
                     {
+                        if (logo is not null)
+                        {
+                            row.ConstantItem(70).Height(60).AlignMiddle().Image(logo).FitArea();
+                            row.ConstantItem(10);
+                        }
+
                         row.RelativeItem().Column(c =>
                         {
                             c.Item().Text(f.EntrepriseNom)
@@ -43,15 +62,15 @@ public class FacturePdfService : IFacturePdfService
                             c.Item().Text(f.EntrepriseAdresse ?? "").FontSize(8).FontColor(GrisSoft);
                             c.Item().Text($"NIF : {f.EntrepriseNumeroFiscal}  |  {f.EntrepriseTelephone}")
                                 .FontSize(8).FontColor(GrisSoft);
-                            c.Item().Text(f.EntrepriseEmail).FontSize(8).FontColor(GrisSoft);
+                            c.Item().Text(f.EntrepriseEmail ?? "").FontSize(8).FontColor(GrisSoft);
                         });
                         row.RelativeItem().AlignRight().Column(c =>
                         {
-                            c.Item().Text("FACTURE").FontSize(26).Bold().FontColor(BleuFinama);
-                            c.Item().Text($"N° {f.Numero}").FontSize(10);
-                            c.Item().Text($"Date : {f.DateFacture:dd MMMM yyyy}").FontSize(9).FontColor(GrisSoft);
+                            c.Item().AlignRight().Text("FACTURE").FontSize(26).Bold().FontColor(BleuFinama);
+                            c.Item().AlignRight().Text($"N° {f.Numero}").FontSize(10);
+                            c.Item().AlignRight().Text($"Date : {f.DateFacture:dd MMMM yyyy}").FontSize(9).FontColor(GrisSoft);
                             if (f.DateEcheance.HasValue)
-                                c.Item().Text($"Échéance : {f.DateEcheance:dd MMMM yyyy}")
+                                c.Item().AlignRight().Text($"Échéance : {f.DateEcheance:dd MMMM yyyy}")
                                     .FontSize(9).FontColor(GrisSoft);
                         });
                     });
@@ -116,7 +135,7 @@ public class FacturePdfService : IFacturePdfService
 
                             table.Cell().Element(Cell).Text(ligne.Description).FontSize(8.5f);
                             table.Cell().Element(Cell).AlignRight()
-                                .Text(ligne.Quantite.ToString("N2")).FontSize(8.5f);
+                                .Text(ligne.Quantite.ToString("0.###")).FontSize(8.5f);
                             table.Cell().Element(Cell).AlignRight()
                                 .Text(FormatMontant(ligne.PrixUnitaireHT, f.EntrepriseDeviseSymbole)).FontSize(8.5f);
                             table.Cell().Element(Cell).AlignRight()
@@ -132,7 +151,10 @@ public class FacturePdfService : IFacturePdfService
                     col.Item().AlignRight().Width(230).Column(c =>
                     {
                         LigneTotaux(c, "Sous-total HT", FormatMontant(f.TotalHT, f.EntrepriseDeviseSymbole));
-                        LigneTotaux(c, $"TVA ({f.Lignes.FirstOrDefault()?.TauxTVA:N0}%)",
+
+                        // Taux unique affiché seulement si toutes les lignes ont le même taux
+                        var taux = f.Lignes.Select(l => l.TauxTVA).Distinct().ToList();
+                        LigneTotaux(c, taux.Count == 1 ? $"TVA ({taux[0]:N0}%)" : "TVA",
                             FormatMontant(f.TotalTVA, f.EntrepriseDeviseSymbole));
 
                         if (f.MontantRegle > 0)
@@ -213,12 +235,26 @@ public class FacturePdfService : IFacturePdfService
                 {
                     c.Item().LineHorizontal(0.5f).LineColor(GrisBordure);
                     c.Item().Height(4);
-                    c.Item().Text(
+                    c.Item().AlignCenter().Text(
                         $"{f.EntrepriseNom}  —  {f.EntrepriseAdresse}  —  NIF : {f.EntrepriseNumeroFiscal}  —  Généré par Finama")
                         .FontSize(7).FontColor(GrisSoft);
                 });
             });
         }).GeneratePdf();
+    }
+
+    private byte[]? LireLogo()
+    {
+        try
+        {
+            if (_tenant.TenantId is not { } id) return null;
+            var dataUrl = _db.Tenants.Where(t => t.Id == id).Select(t => t.LogoDataUrl).FirstOrDefault();
+            return LogoHelper.Decoder(dataUrl);
+        }
+        catch
+        {
+            return null;   // jamais de facture bloquée à cause du logo
+        }
     }
 
     private static void LigneTotaux(ColumnDescriptor col, string label, string valeur)

@@ -15,6 +15,11 @@ public interface IEcritureService
     Task<EcritureDto> ModifierAsync(Guid id, CreerEcritureRequest request, Guid utilisateurId);
 }
 
+/// <summary>
+/// Règle monétaire : Debit/Credit sont TOUJOURS stockés en devise de base du tenant
+/// (balance, grand livre et clôture restent justes). Une ligne en devise étrangère
+/// garde son code devise et son taux ; le montant d'origine = Debit (ou Credit) / TauxChange.
+/// </summary>
 public class EcritureService : IEcritureService
 {
     private readonly AppDbContext _db;
@@ -27,79 +32,51 @@ public class EcritureService : IEcritureService
     // ─── Créer ────────────────────────────────────────────────────────────────
     public async Task<EcritureDto> CreerAsync(CreerEcritureRequest request, Guid utilisateurId)
     {
-        // Vérifier que l'exercice existe et n'est pas clôturé
-        var exercice = await _db.Exercices
-            .FirstOrDefaultAsync(e => e.Id == request.ExerciceId)
-            ?? throw new KeyNotFoundException("Exercice comptable introuvable.");
+        await using var tx = await _db.Database.BeginTransactionAsync();
 
-        if (exercice.EstCloture)
-            throw new InvalidOperationException("Impossible de saisir dans un exercice clôturé.");
+        var exercice = await ChargerExerciceOuvertAsync(request.ExerciceId, request.DateEcriture);
+        var tenantId = exercice.TenantId!.Value;
+        var deviseBase = await DeviseBaseAsync(tenantId);
+        var journal = request.Journal.Trim().ToUpperInvariant();
 
-        // Vérifier que la date est dans l'exercice
-        if (request.DateEcriture < exercice.DateDebut || request.DateEcriture > exercice.DateFin)
-            throw new InvalidOperationException(
-                $"La date doit être dans l'exercice {exercice.Annee} " +
-                $"({exercice.DateDebut:dd/MM/yyyy} — {exercice.DateFin:dd/MM/yyyy}).");
-
-        // Vérifier que tous les comptes existent et sont actifs
-        var compteIds = request.Lignes.Select(l => l.CompteId).Distinct().ToList();
-        var comptes = await _db.CompteComptables
-            .Where(c => compteIds.Contains(c.Id) && c.EstActif)
-            .ToListAsync();
-
-        if (comptes.Count != compteIds.Count)
-            throw new KeyNotFoundException("Un ou plusieurs comptes comptables sont introuvables ou inactifs.");
-
-        // Générer la référence automatique (ex: VT-2024-000042)
-        var reference = await GenererReferenceAsync(request.Journal, exercice.Annee);
+        await VerifierReferencesAsync(request);
+        var lignes = ConstruireLignes(request.Lignes, tenantId, deviseBase);
+        VerifierEquilibre(lignes);
 
         var ecriture = new EcritureComptable
         {
-            Reference = reference,
-            DateEcriture = request.DateEcriture,
-            Libelle = request.Libelle,
-            Journal = request.Journal.ToUpper(),
+            Reference = await GenererReferenceAsync(tenantId, journal, exercice.Annee),
+            DateEcriture = request.DateEcriture.Date,
+            Libelle = request.Libelle.Trim(),
+            Journal = journal,
             Statut = StatutEcriture.Brouillon,
-            ExerciceId = request.ExerciceId,
+            ExerciceId = exercice.Id,
             FactureId = request.FactureId,
             UtilisateurId = utilisateurId,
-            TenantId = exercice.TenantId,
-            Lignes = request.Lignes.Select(l => new LigneEcriture
-            {
-                TenantId = exercice.TenantId,
-                CompteId = l.CompteId,
-                TiersId = l.TiersId,
-                Libelle = l.Libelle,
-                Debit = l.Debit,
-                Credit = l.Credit,
-                Devise = l.Devise.ToUpper(),
-                TauxChange = l.TauxChange,
-                MontantDeviseBase = l.TauxChange.HasValue
-                    ? Math.Round((l.Debit > 0 ? l.Debit : l.Credit) * l.TauxChange.Value, 2)
-                    : null,
-            }).ToList(),
+            TenantId = tenantId,
+            Lignes = lignes,
         };
 
         _db.Ecritures.Add(ecriture);
         await _db.SaveChangesAsync();
+        await tx.CommitAsync();
 
         return await ObtenirAsync(ecriture.Id);
     }
 
-    // ─── Lister (paginé) ──────────────────────────────────────────────────────
+    // ─── Lister (paginé, borné) ───────────────────────────────────────────────
     public async Task<PagedResult<EcritureDto>> ListerAsync(FiltreEcritureQuery filtre)
     {
-        var query = _db.Ecritures
-            .Include(e => e.Lignes)
-                .ThenInclude(l => l.Compte)
-            .Include(e => e.Lignes)
-                .ThenInclude(l => l.Tiers)
-            .Include(e => e.Utilisateur)
-            .AsQueryable();
+        var page = Math.Max(1, filtre.Page);
+        var pageSize = Math.Clamp(filtre.PageSize, 1, 100);
 
-        // Filtres
+        var query = _db.Ecritures.AsNoTracking().AsQueryable();
+
         if (!string.IsNullOrEmpty(filtre.Journal))
-            query = query.Where(e => e.Journal == filtre.Journal.ToUpper());
+        {
+            var journal = filtre.Journal.ToUpperInvariant();
+            query = query.Where(e => e.Journal == journal);
+        }
 
         if (filtre.DateDebut.HasValue)
             query = query.Where(e => e.DateEcriture >= filtre.DateDebut.Value);
@@ -107,35 +84,37 @@ public class EcritureService : IEcritureService
         if (filtre.DateFin.HasValue)
             query = query.Where(e => e.DateEcriture <= filtre.DateFin.Value);
 
-        if (!string.IsNullOrEmpty(filtre.Statut) &&
-            Enum.TryParse<StatutEcriture>(filtre.Statut, true, out var statut))
+        if (!string.IsNullOrEmpty(filtre.Statut) && Enum.TryParse<StatutEcriture>(filtre.Statut, true, out var statut))
             query = query.Where(e => e.Statut == statut);
 
         var total = await query.CountAsync();
+
         var items = await query
+            .Include(e => e.Lignes).ThenInclude(l => l.Compte)
+            .Include(e => e.Lignes).ThenInclude(l => l.Tiers)
+            .Include(e => e.Utilisateur)
             .OrderByDescending(e => e.DateEcriture)
             .ThenByDescending(e => e.CreatedAt)
-            .Skip((filtre.Page - 1) * filtre.PageSize)
-            .Take(filtre.PageSize)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .AsSplitQuery()
             .ToListAsync();
 
         return new PagedResult<EcritureDto>(
             Items: items.Select(MapToDto).ToList(),
-            Page: filtre.Page,
-            PageSize: filtre.PageSize,
+            Page: page,
+            PageSize: pageSize,
             TotalItems: total,
-            TotalPages: (int)Math.Ceiling(total / (double)filtre.PageSize)
-        );
+            TotalPages: (int)Math.Ceiling(total / (double)pageSize));
     }
 
     // ─── Obtenir ──────────────────────────────────────────────────────────────
     public async Task<EcritureDto> ObtenirAsync(Guid id)
     {
         var ecriture = await _db.Ecritures
-            .Include(e => e.Lignes)
-                .ThenInclude(l => l.Compte)
-            .Include(e => e.Lignes)
-                .ThenInclude(l => l.Tiers)
+            .AsNoTracking()
+            .Include(e => e.Lignes).ThenInclude(l => l.Compte)
+            .Include(e => e.Lignes).ThenInclude(l => l.Tiers)
             .Include(e => e.Utilisateur)
             .FirstOrDefaultAsync(e => e.Id == id)
             ?? throw new KeyNotFoundException("Écriture comptable introuvable.");
@@ -148,20 +127,20 @@ public class EcritureService : IEcritureService
     {
         var ecriture = await _db.Ecritures
             .Include(e => e.Lignes)
+            .Include(e => e.Exercice)
             .FirstOrDefaultAsync(e => e.Id == id)
             ?? throw new KeyNotFoundException("Écriture comptable introuvable.");
 
         if (ecriture.Statut != StatutEcriture.Brouillon)
-            throw new InvalidOperationException(
-                $"Seules les écritures en brouillon peuvent être validées. Statut actuel : {ecriture.Statut}.");
+            throw new InvalidOperationException($"Seules les écritures en brouillon peuvent être validées. Statut actuel : {ecriture.Statut}.");
 
-        if (!ecriture.EstEquilibree)
-        {
-            var debit = ecriture.Lignes.Sum(l => l.Debit);
-            var credit = ecriture.Lignes.Sum(l => l.Credit);
-            throw new InvalidOperationException(
-                $"L'écriture n'est pas équilibrée. Débit : {debit:N2} / Crédit : {credit:N2}.");
-        }
+        if (ecriture.Exercice.EstCloture)
+            throw new InvalidOperationException("Impossible de valider : l'exercice est clôturé.");
+
+        if (ecriture.Lignes.Count(l => !l.IsDeleted) < 2)
+            throw new InvalidOperationException("Une écriture comporte au moins deux lignes.");
+
+        VerifierEquilibre(ecriture.Lignes.Where(l => !l.IsDeleted).ToList());
 
         ecriture.Statut = StatutEcriture.Validee;
         await _db.SaveChangesAsync();
@@ -169,126 +148,191 @@ public class EcritureService : IEcritureService
         return await ObtenirAsync(id);
     }
 
-    // ─── Supprimer brouillon ──────────────────────────────────────────────────
+    // ─── Supprimer brouillon (soft delete) ────────────────────────────────────
     public async Task SupprimerBrouillonAsync(Guid id, Guid utilisateurId)
     {
-        var ecriture = await _db.Ecritures
-            .FirstOrDefaultAsync(e => e.Id == id)
+        var ecriture = await _db.Ecritures.FirstOrDefaultAsync(e => e.Id == id)
             ?? throw new KeyNotFoundException("Écriture comptable introuvable.");
 
         if (ecriture.Statut != StatutEcriture.Brouillon)
             throw new InvalidOperationException("Seuls les brouillons peuvent être supprimés.");
 
-        ecriture.IsDeleted = true; // soft delete
+        ecriture.IsDeleted = true;
         await _db.SaveChangesAsync();
     }
 
-    //  MOdification
+    // ─── Modifier un brouillon ────────────────────────────────────────────────
     public async Task<EcritureDto> ModifierAsync(Guid id, CreerEcritureRequest request, Guid utilisateurId)
     {
-        // 1. Récupérer l'écriture existante avec ses lignes
+        await using var tx = await _db.Database.BeginTransactionAsync();
+
         var ecriture = await _db.Ecritures
             .Include(e => e.Lignes)
-            .FirstOrDefaultAsync(e => e.Id == id);
-
-        if (ecriture == null)
-            throw new KeyNotFoundException("Écriture comptable introuvable.");
+            .FirstOrDefaultAsync(e => e.Id == id)
+            ?? throw new KeyNotFoundException("Écriture comptable introuvable.");
 
         if (ecriture.Statut != StatutEcriture.Brouillon)
-            throw new InvalidOperationException("Action interdite : Seuls les brouillons peuvent être modifiés.");
+            throw new InvalidOperationException("Action interdite : seuls les brouillons peuvent être modifiés.");
 
-        // 2. Mise à jour de l'en-tête
-        ecriture.DateEcriture = request.DateEcriture;
-        ecriture.Journal = request.Journal;
-        ecriture.Libelle = request.Libelle;
+        // L'exercice cible (et la date) sont revérifiés : on ne déplace pas un brouillon dans un exercice clos.
+        var exercice = await ChargerExerciceOuvertAsync(request.ExerciceId, request.DateEcriture);
+        var tenantId = ecriture.TenantId!.Value;
+        var deviseBase = await DeviseBaseAsync(tenantId);
+        var journal = request.Journal.Trim().ToUpperInvariant();
+
+        await VerifierReferencesAsync(request);
+        var nouvellesLignes = ConstruireLignes(request.Lignes, tenantId, deviseBase);
+        VerifierEquilibre(nouvellesLignes);
+
+        // Changement de journal ou d'année : nouvelle référence dans la bonne séquence
+        if (ecriture.Journal != journal || ecriture.ExerciceId != exercice.Id)
+            ecriture.Reference = await GenererReferenceAsync(tenantId, journal, exercice.Annee);
+
+        ecriture.DateEcriture = request.DateEcriture.Date;
+        ecriture.Journal = journal;
+        ecriture.Libelle = request.Libelle.Trim();
+        ecriture.ExerciceId = exercice.Id;
+        ecriture.FactureId = request.FactureId;
         ecriture.UtilisateurId = utilisateurId;
 
-        // 3. 🌟 CORRECTION CRITIQUE : Supprimer proprement les anciennes lignes du Change Tracker
-        // On extrait d'abord la liste pour ne pas altérer la boucle pendant la suppression
-        var anciennesLignes = ecriture.Lignes.ToList();
-        foreach (var ancienneLigne in anciennesLignes)
+        _db.LignesEcriture.RemoveRange(ecriture.Lignes.ToList());
+        foreach (var l in nouvellesLignes)
         {
-            _db.LignesEcriture.Remove(ancienneLigne); // Dit explicitement à EF Core de DELETE cette ligne
+            l.EcritureId = ecriture.Id;
+            _db.LignesEcriture.Add(l);
         }
 
-        // 4. INJECTION DES NOUVELLES LIGNES
-        foreach (var l in request.Lignes)
-        {
-            // On ajoute directement dans le DbContext ou dans la collection nettoyée
-            var nouvelleLigne = new LigneEcriture
-            {
-                Id = Guid.NewGuid(),
-                EcritureId = ecriture.Id, // On force le lien d'ID parent
-                TenantId = ecriture.TenantId,
-                CompteId = l.CompteId,
-                Libelle = l.Libelle,
-                Debit = l.Debit,
-                Credit = l.Credit,
-                Devise = "XOF"
-            };
-
-            _db.LignesEcriture.Add(nouvelleLigne);
-        }
-
-        // 5. Sauvegarder en base
         await _db.SaveChangesAsync();
+        await tx.CommitAsync();
 
-        // 6. Retourner le DTO mis à jour
         return await ObtenirAsync(ecriture.Id);
     }
 
-    // ─── Helpers ──────────────────────────────────────────────────────────────
+    // ─── Helpers métier ───────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Génère une référence unique séquentielle par journal et par année.
-    /// Format : VT-2024-000042
-    /// </summary>
-    private async Task<string> GenererReferenceAsync(string journal, int annee)
+    private async Task<ExerciceComptable> ChargerExerciceOuvertAsync(Guid exerciceId, DateTime date)
     {
-        var prefixe = journal.ToUpper();
-        var pattern = $"{prefixe}-{annee}-";
+        var exercice = await _db.Exercices.FirstOrDefaultAsync(e => e.Id == exerciceId)
+            ?? throw new KeyNotFoundException("Exercice comptable introuvable.");
 
-        var dernierNumero = await _db.Ecritures
-            .IgnoreQueryFilters()
-            .Where(e => e.Reference.StartsWith(pattern))
-            .OrderByDescending(e => e.Reference)
-            .Select(e => e.Reference)
-            .FirstOrDefaultAsync();
+        if (exercice.EstCloture)
+            throw new InvalidOperationException("Impossible de saisir dans un exercice clôturé.");
 
-        var sequence = 1;
-        if (dernierNumero is not null)
-        {
-            var partie = dernierNumero.Replace(pattern, "");
-            if (int.TryParse(partie, out var num))
-                sequence = num + 1;
-        }
+        if (date.Date < exercice.DateDebut.Date || date.Date > exercice.DateFin.Date)
+            throw new InvalidOperationException(
+                $"La date doit être comprise dans l'exercice {exercice.Annee} " +
+                $"({exercice.DateDebut:dd/MM/yyyy} — {exercice.DateFin:dd/MM/yyyy}).");
 
-        return $"{pattern}{sequence:D6}";
+        return exercice;
     }
 
-    private static EcritureDto MapToDto(EcritureComptable e) => new(
-        Id: e.Id,
-        Reference: e.Reference,
-        DateEcriture: e.DateEcriture,
-        ExerciceId: e.ExerciceId, //
-        Libelle: e.Libelle,
-        Journal: e.Journal,
-        Statut: e.Statut.ToString(),
-        TotalDebit: e.Lignes.Sum(l => l.Debit),
-        TotalCredit: e.Lignes.Sum(l => l.Credit),
-        EstEquilibree: e.EstEquilibree,
-        UtilisateurNom: $"{e.Utilisateur?.Prenom} {e.Utilisateur?.Nom}".Trim(),
-        CreatedAt: e.CreatedAt,
-        Lignes: e.Lignes.Select(l => new LigneEcritureDto(
-            Id: l.Id,
-            CompteId: l.CompteId,
-            CompteNumero: l.Compte?.Numero ?? "",
-            CompteLibelle: l.Compte?.Libelle ?? "",
-            TiersNom: l.Tiers?.Nom,
-            Libelle: l.Libelle,
-            Debit: l.Debit,
-            Credit: l.Credit,
-            Devise: l.Devise
-        )).ToList()
-    );
+    private async Task<string> DeviseBaseAsync(Guid tenantId)
+    {
+        var devise = await _db.Tenants.Where(t => t.Id == tenantId).Select(t => t.DeviseBase).FirstOrDefaultAsync();
+        return string.IsNullOrWhiteSpace(devise) ? "XOF" : devise.ToUpperInvariant();
+    }
+
+    /// <summary>Comptes, tiers et facture doivent appartenir au tenant courant (filtre global EF).</summary>
+    private async Task VerifierReferencesAsync(CreerEcritureRequest request)
+    {
+        var compteIds = request.Lignes.Select(l => l.CompteId).Distinct().ToList();
+        var comptesValides = await _db.CompteComptables.CountAsync(c => compteIds.Contains(c.Id) && c.EstActif);
+        if (comptesValides != compteIds.Count)
+            throw new KeyNotFoundException("Un ou plusieurs comptes comptables sont introuvables ou inactifs.");
+
+        var tiersIds = request.Lignes.Where(l => l.TiersId.HasValue).Select(l => l.TiersId!.Value).Distinct().ToList();
+        if (tiersIds.Count > 0 && await _db.Tiers.CountAsync(t => tiersIds.Contains(t.Id)) != tiersIds.Count)
+            throw new KeyNotFoundException("Un ou plusieurs tiers sont introuvables.");
+
+        if (request.FactureId is { } factureId && !await _db.Factures.AnyAsync(f => f.Id == factureId))
+            throw new KeyNotFoundException("Facture introuvable.");
+    }
+
+    /// <summary>
+    /// Sans taux : la ligne est en devise de base (quel que soit le code envoyé par le client).
+    /// Avec taux et devise étrangère : le montant saisi est converti en devise de base.
+    /// </summary>
+    private static List<LigneEcriture> ConstruireLignes(IEnumerable<CreerLigneEcritureRequest> source, Guid tenantId, string deviseBase)
+    {
+        return source.Select(l =>
+        {
+            var devise = string.IsNullOrWhiteSpace(l.Devise) ? deviseBase : l.Devise.Trim().ToUpperInvariant();
+            var estEtrangere = l.TauxChange is > 0 && devise != deviseBase;
+
+            decimal EnBase(decimal montant) => estEtrangere
+                ? Math.Round(montant * l.TauxChange!.Value, 2, MidpointRounding.AwayFromZero)
+                : montant;
+
+            var debit = EnBase(l.Debit);
+            var credit = EnBase(l.Credit);
+
+            return new LigneEcriture
+            {
+                Id = Guid.NewGuid(),
+                TenantId = tenantId,
+                CompteId = l.CompteId,
+                TiersId = l.TiersId,
+                Libelle = string.IsNullOrWhiteSpace(l.Libelle) ? null : l.Libelle.Trim(),
+                Debit = debit,
+                Credit = credit,
+                Devise = estEtrangere ? devise : deviseBase,
+                TauxChange = estEtrangere ? l.TauxChange : null,
+                MontantDeviseBase = debit > 0 ? debit : credit,
+            };
+        }).ToList();
+    }
+
+    /// <summary>Partie double stricte en devise de base (aucune tolérance : le grand livre doit tomber juste).</summary>
+    private static void VerifierEquilibre(IReadOnlyCollection<LigneEcriture> lignes)
+    {
+        var debit = lignes.Sum(l => l.Debit);
+        var credit = lignes.Sum(l => l.Credit);
+
+        if (debit != credit)
+            throw new InvalidOperationException(
+                $"L'écriture n'est pas équilibrée en devise de base. Débit : {debit:N2} / Crédit : {credit:N2} (écart {Math.Abs(debit - credit):N2}).");
+
+        if (debit == 0)
+            throw new InvalidOperationException("Une écriture ne peut pas avoir un total nul.");
+    }
+
+    /// <summary>
+    /// Numérotation continue PAR TENANT, journal et année (ex : VT-2026-000042),
+    /// sous verrou SQL : deux saisies simultanées n'obtiennent jamais le même numéro.
+    /// Doit être appelée dans une transaction.
+    /// </summary>
+    private async Task<string> GenererReferenceAsync(Guid tenantId, string journal, int annee)
+    {
+        var numero = await _db.ProchainNumeroAsync(tenantId, $"ECR-{journal}", annee);
+        return $"{journal}-{annee}-{numero:D6}";
+    }
+
+    private static EcritureDto MapToDto(EcritureComptable e)
+    {
+        var lignes = e.Lignes.Where(l => !l.IsDeleted).ToList();
+
+        return new EcritureDto(
+            Id: e.Id,
+            Reference: e.Reference,
+            DateEcriture: e.DateEcriture,
+            Libelle: e.Libelle,
+            Journal: e.Journal,
+            ExerciceId: e.ExerciceId,
+            Statut: e.Statut.ToString(),
+            TotalDebit: lignes.Sum(l => l.Debit),
+            TotalCredit: lignes.Sum(l => l.Credit),
+            EstEquilibree: lignes.Sum(l => l.Debit) == lignes.Sum(l => l.Credit),
+            UtilisateurNom: $"{e.Utilisateur?.Prenom} {e.Utilisateur?.Nom}".Trim(),
+            CreatedAt: e.CreatedAt,
+            Lignes: lignes.Select(l => new LigneEcritureDto(
+                Id: l.Id,
+                CompteNumero: l.Compte?.Numero ?? "",
+                CompteLibelle: l.Compte?.Libelle ?? "",
+                CompteId: l.CompteId,
+                TiersNom: l.Tiers?.Nom,
+                Libelle: l.Libelle,
+                Debit: l.Debit,
+                Credit: l.Credit,
+                Devise: l.Devise)).ToList());
+    }
 }

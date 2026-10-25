@@ -27,7 +27,7 @@ public class EcrituresController : ControllerBase
     /// Crée une nouvelle écriture comptable en brouillon.
     /// </summary>
     [HttpPost]
-    [Authorize(Roles = "Comptable, AdminTenant")] // Réactivé pour aligner la sécurité de saisie
+    [Authorize(Policy = Policies.Saisie)] // Collaborateur : saisie de brouillons
     public async Task<IActionResult> Creer([FromBody] CreerEcritureRequest request)
     {
         var validation = await _validator.ValidateAsync(request);
@@ -62,7 +62,7 @@ public class EcrituresController : ControllerBase
     /// 🌟 AJOUT : Met à jour une écriture comptable existante en statut Brouillon.
     /// </summary>
     [HttpPut("{id:guid}")]
-    [Authorize(Roles = "Comptable, AdminTenant")]
+    [Authorize(Policy = Policies.Saisie)]
     public async Task<IActionResult> Modifier(Guid id, [FromBody] CreerEcritureRequest request)
     {
         // On réutilise le même validateur FluentValidation que la création
@@ -105,9 +105,6 @@ public class EcrituresController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> Lister([FromQuery] FiltreEcritureQuery filtre)
     {
-        if (filtre.PageSize > 100)
-            return BadRequest(new { message = "La taille de page maximale est 100." });
-
         var result = await _ecritureService.ListerAsync(filtre);
         return Ok(result);
     }
@@ -133,7 +130,7 @@ public class EcrituresController : ControllerBase
     /// Valide une écriture en brouillon — irréversible.
     /// </summary>
     [HttpPut("{id:guid}/valider")]
-    [Authorize(Roles = "Comptable, AdminTenant")]
+    [Authorize(Policy = Policies.Comptable)] // validation réservée au Comptable / AdminTenant
     public async Task<IActionResult> Valider(Guid id)
     {
         try
@@ -156,7 +153,7 @@ public class EcrituresController : ControllerBase
     /// Supprime un brouillon (soft delete).
     /// </summary>
     [HttpDelete("{id:guid}")]
-    [Authorize(Roles = "Comptable, AdminTenant")]
+    [Authorize(Policy = Policies.Saisie)]
     public async Task<IActionResult> Supprimer(Guid id)
     {
         try

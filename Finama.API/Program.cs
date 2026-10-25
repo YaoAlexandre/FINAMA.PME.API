@@ -1,6 +1,10 @@
 using Finama.API.Middleware;
+using Finama.API.Securite;
+using Finama.API.Services;
+using Finama.Commerce.Infrastructure;
+using Finama.Commerce.Infrastructure.Persistence;
+using Finama.Commerce.Infrastructure.Services;
 using Finama.Core.DTOs;
-using Finama.Core.Entities;
 using Finama.Core.Validators;
 using Finama.Infrastructure.Data;
 using Finama.Infrastructure.Seeds;
@@ -8,92 +12,56 @@ using Finama.Infrastructure.Services;
 using Finama.Infrastructure.Services.Commercials;
 using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.IdentityModel.Tokens.Jwt;
-using System.IO;
+using System.Net;
 using System.Text;
+using System.Threading.RateLimiting;
 
-// ⚠️ Désactive le remapping automatique des claims JWT par ASP.NET Core.
+// ⚠️ Conservé : JwtService.ValiderToken (refresh) lit le claim brut "sub".
 JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
 
 var builder = WebApplication.CreateBuilder(args);
 
 // ==============================================================================
-// 🔌 CHARGEMENT DYNAMIQUE DU FICHIER .ENV & CONFIGURATION
+// 🔌 CHARGEMENT DU .ENV (dev / VPS) & CONFIGURATION
 // ==============================================================================
-
-// 1. Détection et chargement d'un fichier .env (support du dossier parent et du dossier binaire)
-var baseDirectory = Directory.GetCurrentDirectory();
-var envFilePath = Path.Combine(baseDirectory, ".env");
-
-if (!File.Exists(envFilePath))
+var envFilePath = new[]
 {
-    // Remonte d'un niveau (racine de la solution) si exécuté depuis /Finama.API
-    var parentDir = Directory.GetParent(baseDirectory)?.FullName;
-    if (parentDir != null)
-    {
-        envFilePath = Path.Combine(parentDir, ".env");
-    }
+    Path.Combine(Directory.GetCurrentDirectory(), ".env"),
+    Path.Combine(Directory.GetParent(Directory.GetCurrentDirectory())?.FullName ?? "", ".env"),
+    Path.Combine(AppContext.BaseDirectory, ".env")
+}.FirstOrDefault(File.Exists);
+
+if (envFilePath is not null)
+{
+    // Les valeurs fournies par le serveur (systemd, variables du système) restent PRIORITAIRES :
+    // le .env ne fait que compléter ce qui manque (indispensable en développement, sans effet sur ce que le VPS impose).
+    DotNetEnv.Env.Load(envFilePath, new DotNetEnv.LoadOptions(clobberExistingVars: false));
+    Console.WriteLine($"[FINAMA CONFIG] .env chargé : {envFilePath}");
 }
 
-// Fallback pour les binaires publiés
-if (!File.Exists(envFilePath))
-{
-    envFilePath = Path.Combine(AppContext.BaseDirectory, ".env");
-}
-
-if (File.Exists(envFilePath))
-{
-    Console.WriteLine($"[FINAMA CONFIG] Fichier .env détecté et injecté depuis : {envFilePath}");
-    DotNetEnv.Env.Load(envFilePath);
-}
-else
-{
-    Console.WriteLine("[FINAMA CONFIG] Aucun fichier .env trouvé. Utilisation des variables système globales.");
-}
-
-// 2. Détermination de l'environnement actif (priorité au .env / variables système, sinon Production)
-string env = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production";
+var env = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production";
 builder.Environment.EnvironmentName = env;
+Console.WriteLine($"[FINAMA CONFIG] Environnement : {env}");
 
-// 3. Construction de la hiérarchie de configuration unifiée
 builder.Configuration
     .SetBasePath(AppContext.BaseDirectory)
     .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
     .AddJsonFile($"appsettings.{env}.json", optional: true, reloadOnChange: true)
-    .AddEnvironmentVariables(); // Permet à IConfiguration de lire le .env injecté et le système
+    .AddEnvironmentVariables();
 
-Console.WriteLine($"[FINAMA] Démarrage de l'arborescence en mode : {env}");
+// ─── Base de données (SQL Server : les migrations des deux contextes sont SQL Server) ───
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+if (string.IsNullOrWhiteSpace(connectionString))
+    throw new InvalidOperationException("ConnectionStrings__DefaultConnection est manquante.");
 
-// ─── Base de données ──────────────────────────────────────────────────────────
 builder.Services.AddDbContext<AppDbContext>(options =>
-{
-    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
-                           ?? builder.Configuration["ConnectionStrings__DefaultConnection"]
-                           ?? "";
-
-    // Détection explicite de PostgreSQL (Render / Docker / .env)
-    bool isPostgres = connectionString.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase)
-                   || connectionString.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase)
-                   || connectionString.Contains("Port=5432");
-
-    if (isPostgres)
-    {
-        AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
-        options.UseNpgsql(connectionString, sql => sql.MigrationsAssembly("Finama.Infrastructure"));
-    }
-    else
-    {
-        var sqlServerPath = string.IsNullOrWhiteSpace(connectionString)
-            ? "Server=localhost;Database=FinamaDb;Trusted_Connection=True;TrustServerCertificate=True;"
-            : connectionString;
-
-        options.UseSqlServer(sqlServerPath, sql => sql.MigrationsAssembly("Finama.Infrastructure"));
-    }
-});
+    options.UseSqlServer(connectionString, sql => sql.MigrationsAssembly("Finama.Infrastructure")));
 
 // ─── Multi-tenant ─────────────────────────────────────────────────────────────
 builder.Services.AddHttpContextAccessor();
@@ -116,14 +84,22 @@ builder.Services.AddScoped<IDeviseService, DeviseService>();
 builder.Services.AddScoped<IClotureService, ClotureService>();
 builder.Services.AddTransient<IEmailService, EmailService>();
 builder.Services.AddScoped<IDevisService, DevisService>();
+builder.Services.AddMemoryCache();
 builder.Services.AddScoped<ISuperAdminService, SuperAdminService>();
-
-// ─── Validation FluentValidation ──────────────────────────────────────────────
+builder.Services.AddScoped<IDevisPdfService, DevisPdfService>();
+builder.Services.Configure<PushOptions>(builder.Configuration.GetSection("Push"));
+builder.Services.AddScoped<IPushService, PushService>();
+builder.Services.AddHostedService<AlertesPushService>();
+builder.Services.AddFinamaCommerce(builder.Configuration);
+builder.Services.AddHostedService<AlertesPlateformeService>();
+builder.Services.AddScoped<ILiaisonComptableService, LiaisonComptableService>();
 builder.Services.AddScoped<IValidator<CreerEcritureRequest>, CreerEcritureValidator>();
 
 // ─── Authentification JWT ─────────────────────────────────────────────────────
-var jwtSettings = builder.Configuration.GetSection("Jwt").Get<JwtSettings>()!;
-var cle = Encoding.UTF8.GetBytes(jwtSettings.SecretKey);
+var jwtSettings = builder.Configuration.GetSection("Jwt").Get<JwtSettings>()
+    ?? throw new InvalidOperationException("Section Jwt manquante.");
+if (string.IsNullOrWhiteSpace(jwtSettings.SecretKey) || jwtSettings.SecretKey.Length < 32)
+    throw new InvalidOperationException("Jwt__SecretKey doit faire au moins 32 caractères.");
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -131,7 +107,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(cle),
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings.SecretKey)),
             ValidateIssuer = true,
             ValidIssuer = jwtSettings.Issuer,
             ValidateAudience = true,
@@ -141,60 +117,78 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-// ─── Autorisation par rôles ───────────────────────────────────────────────────
-builder.Services.AddAuthorization(options =>
+// ─── Autorisation : RequireRole (le claim "role" est mappé en ClaimTypes.Role par JwtBearer .NET 9) ───
+
+builder.Services.AjouterPermissionsFinama();
+//builder.Services.AddAuthorization(options =>
+//{
+//    options.AddPolicy(Policies.AdminTenant, p => p.RequireRole("AdminTenant", "SuperAdmin"));
+//    options.AddPolicy(Policies.Comptable, p => p.RequireRole("AdminTenant", "Comptable", "SuperAdmin"));
+//    options.AddPolicy(Policies.Saisie, p => p.RequireRole("AdminTenant", "Comptable", "Collaborateur", "SuperAdmin"));
+//    options.AddPolicy(Policies.LectureSeule, p => p.RequireRole("AdminTenant", "Comptable", "Collaborateur", "Lecture", "Commercial", "SuperAdmin"));
+//    options.AddPolicy(Policies.Commercial, p => p.RequireRole("Commercial", "AdminTenant", "SuperAdmin"));
+//    options.AddPolicy(Policies.SuperAdmin, p => p.RequireRole("SuperAdmin"));
+//});
+
+// ─── Reverse proxy nginx : IP client réelle + schéma HTTPS ────────────────────
+builder.Services.Configure<ForwardedHeadersOptions>(o =>
 {
-    options.AddPolicy("AdminTenant", p =>
-        p.RequireClaim("role", nameof(RoleUtilisateur.AdminTenant), nameof(RoleUtilisateur.SuperAdmin)));
-
-    options.AddPolicy("Comptable", p =>
-        p.RequireClaim("role", nameof(RoleUtilisateur.AdminTenant), nameof(RoleUtilisateur.Comptable), nameof(RoleUtilisateur.SuperAdmin)));
-
-    options.AddPolicy("Saisie", p =>
-        p.RequireClaim("role", nameof(RoleUtilisateur.AdminTenant), nameof(RoleUtilisateur.Comptable), nameof(RoleUtilisateur.Collaborateur), nameof(RoleUtilisateur.SuperAdmin)));
-
-    options.AddPolicy("LectureSeule", p =>
-        p.RequireClaim("role", nameof(RoleUtilisateur.AdminTenant), nameof(RoleUtilisateur.Comptable), nameof(RoleUtilisateur.Collaborateur), nameof(RoleUtilisateur.Lecture), nameof(RoleUtilisateur.Commercial), nameof(RoleUtilisateur.SuperAdmin)));
-
-    options.AddPolicy("Commercial", p =>
-        p.RequireClaim("role", nameof(RoleUtilisateur.Commercial), nameof(RoleUtilisateur.AdminTenant), nameof(RoleUtilisateur.SuperAdmin)));
+    o.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    o.KnownProxies.Add(IPAddress.Loopback);
+    o.KnownProxies.Add(IPAddress.IPv6Loopback);
 });
 
-// ─── CORS Dynamique pour Tunnels ngrok et Dev Local ───────────────────────────
+// ─── Limitation de débit (anti brute-force OTP / login / formulaires publics) ───
+builder.Services.AddRateLimiter(o =>
+{
+    o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    o.OnRejected = async (ctx, ct) =>
+    {
+        ctx.HttpContext.Response.ContentType = "application/json";
+        await ctx.HttpContext.Response.WriteAsync(
+            "{\"statut\":429,\"message\":\"Trop de tentatives. Patientez une minute puis réessayez.\"}", ct);
+    };
+
+    o.AddPolicy(RateLimits.Auth, ctx => RateLimitPartition.GetFixedWindowLimiter(
+        ctx.Connection.RemoteIpAddress?.ToString() ?? "anon",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+
+    o.AddPolicy(RateLimits.Public, ctx => RateLimitPartition.GetFixedWindowLimiter(
+        ctx.Connection.RemoteIpAddress?.ToString() ?? "anon",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromMinutes(10), QueueLimit = 0 }));
+});
+
+// ─── CORS : liste blanche explicite ───────────────────────────────────────────
+var originesAutorisees = builder.Configuration.GetSection("CorsSettings:AllowedOrigins").Get<string[]>() ?? [];
+var estDev = builder.Environment.IsDevelopment();
+
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("Frontend", policy =>
-    {
-        // Dans builder.Services.AddCors(...)
-        policy.SetIsOriginAllowed(origin =>
+    options.AddPolicy("Frontend", policy => policy
+        .SetIsOriginAllowed(origin =>
         {
-            // Autorise les fichiers locaux ouvert via file://
-            if (string.Equals(origin, "null", StringComparison.OrdinalIgnoreCase))
-                return true;
+            if (originesAutorisees.Contains(origin, StringComparer.OrdinalIgnoreCase)) return true;
 
-            var allowedOrigins = builder.Configuration.GetSection("CorsSettings:AllowedOrigins").Get<string[]>() ?? Array.Empty<string>();
-            if (allowedOrigins.Any(o => o.Equals(origin, StringComparison.OrdinalIgnoreCase)))
-                return true;
+            if (Uri.TryCreate(origin, UriKind.Absolute, out var uri))
+            {
+                // Sous-domaines HTTPS de Finama (app., site., www.)
+                if (uri.Scheme == Uri.UriSchemeHttps &&
+                    (uri.Host == "finamaweb.com" || uri.Host.EndsWith(".finamaweb.com", StringComparison.OrdinalIgnoreCase)))
+                    return true;
 
-            if (origin.StartsWith("https://localhost") || origin.StartsWith("http://localhost"))
-                return true;
+                if (estDev && uri.IsLoopback) return true;
+            }
 
-            if (origin.EndsWith(".ngrok-free.app") || origin.EndsWith(".ngrok-free.dev") ||
-                origin.EndsWith(".netlify.app") || origin.EndsWith(".onrender.com") || origin.EndsWith(".finamaweb.com"))
-                return true;
-
-            return false;
+            // Fichier local (file://) : uniquement en développement
+            return estDev && origin == "null";
         })
-                .AllowAnyHeader()
+        .AllowAnyHeader()
         .AllowAnyMethod()
-        .AllowCredentials();
-    });
+        .WithExposedHeaders("Content-Disposition"));
 });
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-
-// ─── Swagger avec support JWT ─────────────────────────────────────────────────
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "Finama API", Version = "v1", Description = "SaaS de comptabilité pour PME africaines" });
@@ -207,34 +201,55 @@ builder.Services.AddSwaggerGen(c =>
         In = ParameterLocation.Header,
         Description = "Entrez votre token JWT ici"
     });
-    c.AddSecurityRequirement(new OpenApiSecurityRequirement { { new OpenApiSecurityScheme { Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" } }, [] } });
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        { new OpenApiSecurityScheme { Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" } }, [] }
+    });
 });
 
 builder.Services.AddHealthChecks();
 
-// ✅ CODE CORRIGÉ :
 var app = builder.Build();
 
-app.MapHealthChecks("/health");
+// Première mise en route : génère une paire de clés de notification à copier dans la configuration
+if (!app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<PushOptions>>().Value.EstConfigure)
+{
+    var cles = WebPush.VapidHelper.GenerateVapidKeys();
+    app.Logger.LogWarning("Notifications désactivées : clés absentes. À copier dans la configuration :\nPush__VapidPublicKey={Pub}\nPush__VapidPrivateKey={Priv}",
+        cles.PublicKey, cles.PrivateKey);
+}
 
-// ─── Pipeline HTTP ───────────────────────────────────────────────────────────
+// ─── Pipeline HTTP ────────────────────────────────────────────────────────────
+app.UseForwardedHeaders();
 app.UseExceptionHandling();
-app.UseSwagger();
-app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "Finama v1"));
+
+if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Swagger:Enabled"))
+{
+    app.UseSwagger();
+    app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "Finama v1"));
+}
+
+if (!app.Environment.IsDevelopment())
+    app.UseHsts();
 
 app.UseHttpsRedirection();
 app.UseCors("Frontend");
+app.UseRateLimiter();
 app.UseAuthentication();
+app.UseMotDePasseObligatoire();// bloque l'API tant que le mot de passe temporaire n'est pas changé
+app.UseSupportFinama();
+app.UsePermissionsCommerce();
+app.UseModulesFinama();
 app.UseAuthorization();
 
+app.MapHealthChecks("/health");
 app.MapControllers();
 
-// ─── Migration et Seeding sécurisés ──────────────────────────────────────────
 await ApplyMigrationsAndSeedAsync(app);
 
 await app.RunAsync();
 
-// Méthode locale isolée
+// ─── Migrations (deux contextes) + seed — échec bloquant hors développement ───
 static async Task ApplyMigrationsAndSeedAsync(WebApplication app)
 {
     using var scope = app.Services.CreateScope();
@@ -243,23 +258,44 @@ static async Task ApplyMigrationsAndSeedAsync(WebApplication app)
 
     try
     {
-        var context = services.GetRequiredService<AppDbContext>();
+        var compta = services.GetRequiredService<AppDbContext>();
+        compta.Database.SetCommandTimeout(TimeSpan.FromSeconds(120));
+        await compta.Database.MigrateAsync();
 
-        logger.LogInformation("[FINAMA INIT] Application des migrations EF Core...");
+        var commerce = services.GetRequiredService<CommerceDbContext>();
+        commerce.Database.SetCommandTimeout(TimeSpan.FromSeconds(120));
+        await commerce.Database.MigrateAsync();
 
-        // Timeout explicite pour les migrations pour éviter le blocage indéfini
-        context.Database.SetCommandTimeout(TimeSpan.FromSeconds(30));
-        await context.Database.MigrateAsync();
+        await DataSeeder.SeedSuperAdminAsync(compta, app.Configuration);
 
-        var passwordHasher = services.GetService<IPasswordHasher<Utilisateur>>();
-        await DataSeeder.SeedSuperAdminAsync(context, passwordHasher);
-
-        logger.LogInformation("[FINAMA INIT] Migrations et seeding terminés avec succès.");
+        logger.LogInformation("[FINAMA INIT] Migrations (Compta + Commerce) et seed terminés.");
     }
     catch (Exception ex)
     {
-        logger.LogError(ex, "[FINAMA INIT ERROR] Une erreur est survenue lors de la migration ou du seeding.");
+        logger.LogCritical(ex, "[FINAMA INIT] Échec des migrations ou du seed.");
+        if (!app.Environment.IsDevelopment())
+            throw; // Ne jamais servir une API sur un schéma incohérent
     }
 }
 
-app.Run();
+// ─── Constantes partagées ─────────────────────────────────────────────────────
+public static class Policies
+{
+    public const string AdminTenant = "AdminTenant";
+    public const string Comptable = "Comptable";
+    public const string Saisie = "Saisie";
+    public const string LectureSeule = "LectureSeule";
+    public const string Commercial = "Commercial";
+    public const string SuperAdmin = "SuperAdminPolicy";
+    public const string Utilisateurs = "Utilisateurs";
+    public const string Ventes = "Ventes";
+    public const string Caisse = "Caisse";
+    public const string FinJournee = "FinJournee";
+    public const string Stock = "Stock";
+}
+
+public static class RateLimits
+{
+    public const string Auth = "auth";
+    public const string Public = "public";
+}

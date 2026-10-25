@@ -29,6 +29,12 @@ public class Tenant : BaseEntity
     public string? BanqueNom { get; set; }
     public string? BanqueBIC { get; set; }
     public string? BanqueRIB { get; set; }
+
+    /// <summary>Logo (data URL PNG/JPEG/WebP, 300 Ko max) : tickets de caisse, factures, en-tête.</summary>
+    public string? LogoDataUrl { get; set; }
+
+    /// <summary>Modules ouverts à l'entreprise (géré par le SuperAdmin selon l'abonnement).</summary>
+    public ModuleFinama Modules { get; set; } = ModuleFinama.Tous;
     // ─── Navigation ───────────────────────────────────────────────────────────
     public ICollection<Utilisateur> Utilisateurs { get; set; } = [];
     public ICollection<CompteComptable> CompteComptables { get; set; } = [];

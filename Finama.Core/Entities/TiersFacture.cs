@@ -44,6 +44,7 @@ public class Facture : TenantEntity
     public decimal MontantRegle { get; set; } = 0;
     public decimal Solde => TotalTTC - MontantRegle;
     public string? Notes { get; set; }
+    public Guid? DevisId { get; set; }                     // devis d'origine (module Ventes & Devis)
     public ICollection<LigneFacture> Lignes { get; set; } = [];
     public ICollection<EcritureComptable> Ecritures { get; set; } = [];
 }

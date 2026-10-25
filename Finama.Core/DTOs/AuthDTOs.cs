@@ -50,6 +50,9 @@ public class AuthResult
     public bool IsSuccess { get; set; }
     public string Message { get; set; } = string.Empty;
 
+    /// <summary>Nouvelle session émise après un changement de mot de passe (claim pwd_change retiré).</summary>
+    public AuthResponse? Session { get; set; }
+
     public static AuthResult Success(string message = "Opération réussie.")
         => new() { IsSuccess = true, Message = message };
 

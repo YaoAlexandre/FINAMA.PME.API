@@ -1,5 +1,6 @@
 <Solution>
   <Project Path="Finama.API/Finama.API.csproj" />
+  <Project Path="Finama.Commerce/Finama.Commerce.csproj" Id="cdc7e19b-9440-4a34-bc68-914bf940637f" />
   <Project Path="Finama.Core/Finama.Core.csproj" />
   <Project Path="Finama.Infrastructure/Finama.Infrastructure.csproj" />
 </Solution>

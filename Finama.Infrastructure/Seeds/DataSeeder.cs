@@ -1,46 +1,48 @@
-﻿using Finama.Core.Entities;
+using Finama.Core.Entities;
 using Finama.Infrastructure.Data;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 
 namespace Finama.Infrastructure.Seeds;
 
 public static class DataSeeder
 {
-    public static async Task SeedSuperAdminAsync(AppDbContext context, IPasswordHasher<Utilisateur>? passwordHasher = null)
+    /// <summary>
+    /// Crée le SuperAdmin au premier démarrage uniquement.
+    /// Variables requises (.env / systemd) : SuperAdmin__Email, SuperAdmin__MotDePasseInitial.
+    /// Le mot de passe initial devra être changé à la première connexion.
+    /// </summary>
+    public static async Task SeedSuperAdminAsync(AppDbContext context, IConfiguration config)
     {
-        // 1. Vérifier si un SuperAdmin existe déjà
-        var superAdminExiste = await context.Set<Utilisateur>()
-            .AnyAsync(u => u.Role == RoleUtilisateur.SuperAdmin);
+        var existe = await context.Utilisateurs
+            .IgnoreQueryFilters()
+            .AnyAsync(u => u.Role == RoleUtilisateur.SuperAdmin && !u.IsDeleted);
 
-        if (superAdminExiste)
-        {
-            return;
-        }
+        if (existe) return;
 
-        // 2. Instancier le compte SuperAdmin
-        var superAdmin = new Utilisateur
+        var email = config["SuperAdmin:Email"];
+        var motDePasse = config["SuperAdmin:MotDePasseInitial"];
+
+        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(motDePasse))
+            throw new InvalidOperationException(
+                "Aucun SuperAdmin en base : définissez SuperAdmin__Email et SuperAdmin__MotDePasseInitial.");
+
+        if (motDePasse.Length < 12)
+            throw new InvalidOperationException("SuperAdmin__MotDePasseInitial doit faire au moins 12 caractères.");
+
+        context.Utilisateurs.Add(new Utilisateur
         {
-            Nom = "VOKOU",
-            Prenom = "Yao Alexandre",
-            Email = "vokouyaoalexandre@gmail.com", // Votre adresse e-mail réelle pour recevoir les messages
+            Nom = config["SuperAdmin:Nom"] ?? "VOKOU",
+            Prenom = config["SuperAdmin:Prenom"] ?? "Yao Alexandre",
+            Email = email.Trim().ToLowerInvariant(),
             Role = RoleUtilisateur.SuperAdmin,
             TenantId = null,
             EstActif = true,
+            MotDePasseHash = BCrypt.Net.BCrypt.HashPassword(motDePasse),
+            DoitChangerMotDePasse = true,
             CreatedAt = DateTime.UtcNow
-        };
+        });
 
-        // 3. Hachage du mot de passe avec BCrypt
-        if (passwordHasher != null)
-        {
-            superAdmin.MotDePasseHash = passwordHasher.HashPassword(superAdmin, "SuperAdmin2026!");
-        }
-        else
-        {
-            superAdmin.MotDePasseHash = BCrypt.Net.BCrypt.HashPassword("SuperAdmin2026!");
-        }
-
-        context.Set<Utilisateur>().Add(superAdmin);
         await context.SaveChangesAsync();
     }
 }

@@ -17,7 +17,7 @@ public record CreerLigneEcritureRequest(
     string? Libelle,
     decimal Debit,
     decimal Credit,
-    string Devise = "STN",
+    string Devise = "",                    // vide = devise de base du tenant
     decimal? TauxChange = null
 );
 

@@ -1,4 +1,4 @@
-﻿using Finama.Core.DTOs;
+using Finama.Core.DTOs;
 using Finama.Core.Entities;
 using Finama.Infrastructure.Data;
 using Finama.Infrastructure.Services;
@@ -28,6 +28,7 @@ public class DemandesAccesController : ControllerBase
     /// </summary>
     [HttpPost("soumettre")]
     [AllowAnonymous]
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting(RateLimits.Public)] // 5 demandes / 10 min / IP
     public async Task<IActionResult> SoumettreDemande([FromBody] CreerDemandeAccesRequest request)
     {
         var emailNormalise = request.Email.Trim().ToLower();

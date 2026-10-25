@@ -19,9 +19,9 @@ public record ModifierTiersRequest(
     string? Telephone,
     string? Email,
     string? Devise,
-    bool EstActif
+    bool EstActif,
+    Guid? CompteComptableId = null
 );
-
 public record TiersDto(
     Guid Id,
     string Code,
@@ -35,7 +35,8 @@ public record TiersDto(
     string? CompteNumero,
     string? CompteLibelle,
     bool EstActif,
-    DateTime CreatedAt
+    DateTime CreatedAt,
+    Guid? CompteComptableId = null
 );
 
 public record FiltreTiersQuery(

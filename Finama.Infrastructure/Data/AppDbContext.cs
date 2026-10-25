@@ -33,8 +33,13 @@ public class AppDbContext : DbContext
     public DbSet<LigneDevis> LignesDevis => Set<LigneDevis>();
 
     public DbSet<DemandeAcces> DemandesAcces { get; set; }
-
-
+    public DbSet<ProfilAcces> ProfilsAcces => Set<ProfilAcces>();
+    public DbSet<AccesSupport> AccesSupports => Set<AccesSupport>();
+    public DbSet<AbonnementPush> AbonnementsPush => Set<AbonnementPush>();
+    public DbSet<NotificationEnvoyee> NotificationsEnvoyees => Set<NotificationEnvoyee>();
+    public DbSet<ParametresComptables> ParametresComptables => Set<ParametresComptables>();
+    public DbSet<ReglementFacture> ReglementsFacture => Set<ReglementFacture>();
+    public DbSet<PieceComptabilisee> PiecesComptabilisees => Set<PieceComptabilisee>();
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

@@ -12,6 +12,7 @@ public interface IJwtService
 {
     string GenererAccessToken(Utilisateur utilisateur, Tenant? tenant);
     string GenererRefreshToken();
+    string HacherRefreshToken(string refreshToken);
     ClaimsPrincipal? ValiderToken(string token);
 }
 
@@ -30,13 +31,17 @@ public class JwtService : IJwtService
         var credentials = new SigningCredentials(cle, SecurityAlgorithms.HmacSha256);
 
         var claims = new List<Claim>
-    {
-        new Claim(JwtRegisteredClaimNames.Sub,   utilisateur.Id.ToString()),
-        new Claim(JwtRegisteredClaimNames.Email, utilisateur.Email),
-        new Claim(JwtRegisteredClaimNames.Jti,   Guid.NewGuid().ToString()),
-        new Claim(ClaimTypes.Role,               ((RoleUtilisateur)utilisateur.Role).ToString()), // 👈 Remplacement de "role"
-        new Claim("nom",                         $"{utilisateur.Prenom} {utilisateur.Nom}"),
-    };
+        {
+            new(JwtRegisteredClaimNames.Sub,   utilisateur.Id.ToString()),
+            new(JwtRegisteredClaimNames.Email, utilisateur.Email),
+            new(JwtRegisteredClaimNames.Jti,   Guid.NewGuid().ToString()),
+            new(ClaimTypes.Role,               utilisateur.Role.ToString()), // sérialisé en "role"
+            new("nom",                         $"{utilisateur.Prenom} {utilisateur.Nom}"),
+        };
+
+        // Mot de passe temporaire : l'API refusera tout sauf /api/auth/* (MotDePasseObligatoireMiddleware)
+        if (utilisateur.DoitChangerMotDePasse)
+            claims.Add(new Claim("pwd_change", "1"));
 
         if (tenant is not null)
         {
@@ -50,17 +55,17 @@ public class JwtService : IJwtService
             audience: _settings.Audience,
             claims: claims,
             expires: DateTime.UtcNow.AddMinutes(_settings.AccessTokenDureeMinutes),
-            signingCredentials: credentials
-        );
+            signingCredentials: credentials);
 
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
     public string GenererRefreshToken()
-    {
-        var bytes = RandomNumberGenerator.GetBytes(64);
-        return Convert.ToBase64String(bytes);
-    }
+        => Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
+
+    /// <summary>Seul le hash est stocké en base : une fuite de la table Utilisateurs ne permet pas de voler une session.</summary>
+    public string HacherRefreshToken(string refreshToken)
+        => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(refreshToken)));
 
     public ClaimsPrincipal? ValiderToken(string token)
     {
@@ -77,9 +82,14 @@ public class JwtService : IJwtService
                 ValidIssuer = _settings.Issuer,
                 ValidateAudience = true,
                 ValidAudience = _settings.Audience,
-                ValidateLifetime = false, // on valide nous-mêmes pour le refresh
+                ValidateLifetime = false, // le refresh accepte un access token expiré (signature vérifiée)
                 ClockSkew = TimeSpan.Zero,
-            }, out _);
+            }, out var jeton);
+
+            // Refuse tout algorithme autre que HS256 (protection "alg confusion")
+            if (jeton is not JwtSecurityToken jwt ||
+                !jwt.Header.Alg.Equals(SecurityAlgorithms.HmacSha256, StringComparison.OrdinalIgnoreCase))
+                return null;
 
             return principal;
         }

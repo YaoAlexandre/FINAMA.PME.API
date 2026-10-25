@@ -1,13 +1,8 @@
-﻿using Finama.Core.DTOs;
+using Finama.Core.DTOs;
 using Finama.Core.Entities;
 using Finama.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Finama.Infrastructure.Services.Commercials;
 
@@ -173,13 +168,21 @@ public class DevisService : IDevisService
         if (devis.Statut != StatutDevis.Accepte)
             throw new InvalidOperationException("Seul un devis accepté peut être converti en facture.");
 
-        var annee = DateTime.UtcNow.Year;
-        var count = await _db.Factures.CountAsync() + 1;
+        var tenantId = devis.TenantId ?? throw new InvalidOperationException("Devis non rattaché à un tenant.");
+        var aujourdHui = DateTime.Today;
+        var deviseBase = await _db.Tenants.Where(t => t.Id == tenantId).Select(t => t.DeviseBase).FirstOrDefaultAsync();
+
+        // Même séquence et même format que FactureService (FA-2026-000123) : plus de doublon "FAC-…-Count+1"
+        await using var tx = await _db.Database.BeginTransactionAsync();
+        var seq = await _db.ProchainNumeroAsync(tenantId, "FAC-FA", aujourdHui.Year);
 
         var facture = new Facture
         {
-            TenantId = devis.TenantId,
-            Numero = $"FAC-{annee}-{count:D4}",
+            TenantId = tenantId,
+            Numero = $"FA-{aujourdHui.Year}-{seq:D6}",
+            DateFacture = aujourdHui,
+            DateEcheance = aujourdHui.AddDays(30),
+            Devise = string.IsNullOrWhiteSpace(deviseBase) ? "XOF" : deviseBase,
             TiersId = devis.TiersId,
             Type = TypeFacture.Vente,
             Statut = StatutFacture.Brouillon,
@@ -202,6 +205,7 @@ public class DevisService : IDevisService
 
         devis.Statut = StatutDevis.Converti;
         await _db.SaveChangesAsync();
+        await tx.CommitAsync();
 
         return facture.Id;
     }
@@ -220,24 +224,53 @@ public class DevisService : IDevisService
     }
 
     private static DevisDto ToDto(Devis d) => new(
-        d.Id, d.Numero, d.Libelle, d.DateCreation, d.DateExpiration,
-        d.Statut,
-        d.Statut switch
-        {
-            StatutDevis.Brouillon => "Brouillon",
-            StatutDevis.Envoye => "Envoyé",
-            StatutDevis.Accepte => "Accepté",
-            StatutDevis.Refuse => "Refusé",
-            StatutDevis.Expire => "Expiré",
-            StatutDevis.Converti => "Converti",
-            _ => "Inconnu"
-        },
-        d.TiersId,
-        d.Tiers?.Nom ?? "",
-        d.TotalHT, d.TotalTVA, d.TotalTTC,
-        d.Lignes.Select(l => new LigneDevisDto(
-            l.Id, l.Designation, l.Quantite, l.PrixUnitaireHT,
-            l.TauxTVA, l.MontantHT, l.MontantTVA, l.MontantTTC
-        )).ToList()
-    );
+    d.Id,
+    d.Numero,
+    d.Libelle,
+    d.DateCreation,
+    d.DateExpiration,
+    d.Statut,
+    d.Statut switch
+    {
+        StatutDevis.Brouillon => "Brouillon",
+        StatutDevis.Envoye => "Envoyé",
+        StatutDevis.Accepte => "Accepté",
+        StatutDevis.Refuse => "Refusé",
+        StatutDevis.Expire => "Expiré",
+        StatutDevis.Converti => "Converti",
+        _ => "Inconnu"
+    },
+    d.TiersId,
+    d.Tiers?.Nom ?? "",
+    d.Tiers?.Email,
+    d.Tiers?.Telephone,
+    d.SousTotalHT,
+    d.RemiseGlobalePourcent,
+    d.RemiseGlobale,
+    d.TotalHT,
+    d.TotalTVA,
+    d.TotalTTC,
+    d.Notes,
+    d.Conditions,
+    d.DateEnvoi,
+    d.DateDecision,
+    d.MotifRefus,
+    d.FactureId,
+    d.Facture?.Numero,
+    d.Version,
+    d.UtilisateurCreateur?.NomComplet ?? "", // Ou le champ correspondant à l'utilisateur créateur
+    d.Lignes.Select((l, index) => new LigneDevisDto(
+        l.Id,
+        index + 1,                            // Ordre
+        l.ProduitId,
+        l.Designation,
+        l.Quantite,
+        l.PrixUnitaireHT,
+        l.RemisePourcent,
+        l.TauxTVA,
+        l.MontantHT,
+        l.MontantTVA,
+        l.MontantTTC
+    )).ToList()
+);
 }

@@ -1,13 +1,15 @@
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Mvc;
-using System.Security.Claims;
 using Finama.Core.DTOs;
 using Finama.Infrastructure.Services;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using System.Security.Claims;
 
 namespace Finama.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[EnableRateLimiting(RateLimits.Auth)]
 public class AuthController : ControllerBase
 {
     private readonly IAuthService _authService;
@@ -17,83 +19,41 @@ public class AuthController : ControllerBase
         _authService = authService;
     }
 
-    /// <summary>
-    /// Connexion — retourne access token + refresh token.
-    /// </summary>
+    /// <summary>Étape 1 : email + mot de passe. Renvoie RequiresOtp=true ou directement les jetons (appareil de confiance).</summary>
     [HttpPost("login")]
     [AllowAnonymous]
     public async Task<IActionResult> Login([FromBody] LoginRequest request)
-    {
-        try
-        {
-            var result = await _authService.LoginAsync(request);
-            return Ok(result);
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return Unauthorized(new { message = ex.Message });
-        }
-    }
+        => Ok(await _authService.LoginAsync(request));
 
-    /// <summary>
-    /// Valide le code OTP envoyé par e-mail et finalise l'authentification de l'utilisateur.
-    /// </summary>
-    /// <remarks>
-    /// Cette étape intervient après la validation de l'e-mail et du mot de passe. 
-    /// Si le code OTP est valide, non expiré et associé au bon utilisateur, l'API génère 
-    /// les jetons d'authentification finaux (JWT) et initialise le plan comptable du Tenant si nécessaire.
-    /// </remarks>
-    /// <param name="request">Le modèle contenant l'e-mail de l'utilisateur et le code OTP reçu.</param>
-    /// <returns>Une réponse contenant le token d'accès JWT et les informations de l'entreprise (Tenant).</returns>
-    /// <response code="200">Connexion réussie. Les jetons d'authentification sont émis.</response>
-    /// <response code="400">Si l'adresse e-mail ou le code OTP fourni est vide ou mal formé.</response>
-    /// <response code="401">Si le code est incorrect, expiré, ou si l'entreprise associée est suspendue.</response>
+    /// <summary>Étape 2 : validation du code OTP reçu par email (5 tentatives max par code).</summary>
     [HttpPost("verify-otp")]
+    [AllowAnonymous]
     [ProducesResponseType(typeof(AuthResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> VerifyOtp([FromBody] VerifyOtpRequest request)
     {
-        if (request == null || string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.CodeOtp))
-        {
-            return BadRequest(new { Message = "L'email et le code OTP sont obligatoires." });
-        }
+        if (request is null || string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.CodeOtp))
+            return BadRequest(new { message = "L'email et le code OTP sont obligatoires." });
 
-        try
-        {
-            var response = await _authService.VerifierOtpAsync(request);
-            return Ok(response);
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return Unauthorized(new { Message = ex.Message });
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new { Message = "Une erreur interne est survenue lors de la validation.", Details = ex.Message });
-        }
+        return Ok(await _authService.VerifierOtpAsync(request));
     }
 
     /// <summary>
-    /// Inscription d'un nouveau tenant (entreprise) + admin + plan comptable OHADA.
+    /// Création directe d'un tenant : réservée au SuperAdmin.
+    /// Le parcours public passe par POST /api/demandesacces/soumettre puis approbation.
     /// </summary>
     [HttpPost("register")]
-    [AllowAnonymous]
+    [Authorize(Policy = Policies.SuperAdmin)]
     public async Task<IActionResult> Register([FromBody] RegisterTenantRequest request)
     {
-        try
-        {
-            var result = await _authService.RegisterTenantAsync(request);
-            return CreatedAtAction(nameof(Login), result);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return Conflict(new { message = ex.Message });
-        }
+        var result = await _authService.RegisterTenantAsync(request);
+        return StatusCode(StatusCodes.Status201Created, result);
     }
 
     /// <summary>
-    /// Renouvelle l'access token via le refresh token.
+    /// Renouvelle la session. Un refus est un cas normal (session expirée, autre appareil, autre base) :
+    /// il est géré ici en 401 simple, sans remonter comme une erreur (pas d'arrêt du débogueur).
     /// </summary>
     [HttpPost("refresh")]
     [AllowAnonymous]
@@ -101,62 +61,49 @@ public class AuthController : ControllerBase
     {
         try
         {
-            var result = await _authService.RefreshTokenAsync(request);
-            return Ok(result);
+            return Ok(await _authService.RefreshTokenAsync(request));
         }
         catch (UnauthorizedAccessException ex)
         {
-            return Unauthorized(new { message = ex.Message });
+            return Unauthorized(new { statut = 401, code = "SESSION_EXPIREE", message = ex.Message });
         }
     }
 
-    /// <summary>
-    /// Déconnexion — invalide le refresh token côté serveur.
-    /// </summary>
     [HttpPost("logout")]
     [Authorize]
     public async Task<IActionResult> Logout()
     {
-        var idClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                   ?? User.FindFirst("sub")?.Value;
-
-        if (Guid.TryParse(idClaim, out var utilisateurId))
+        if (Guid.TryParse(ObtenirUtilisateurId(), out var utilisateurId))
             await _authService.LogoutAsync(utilisateurId);
 
         return NoContent();
     }
 
-    /// <summary>
-    /// Retourne les infos du compte connecté (test d'auth).
-    /// </summary>
     [HttpGet("me")]
     [Authorize]
-    public IActionResult Me()
+    public IActionResult Me() => Ok(new
     {
-        return Ok(new
-        {
-            Id = User.FindFirst("sub")?.Value,
-            Email = User.FindFirst("email")?.Value,
-            Nom = User.FindFirst("nom")?.Value,
-            Role = User.FindFirst("role")?.Value,
-            TenantId = User.FindFirst("tenant_id")?.Value,
-            TenantNom = User.FindFirst("tenant_nom")?.Value,
-        });
-    }
+        Id = ObtenirUtilisateurId(),
+        Email = User.FindFirst("email")?.Value ?? User.FindFirst(ClaimTypes.Email)?.Value,
+        Nom = User.FindFirst("nom")?.Value,
+        Role = User.FindFirst(ClaimTypes.Role)?.Value ?? User.FindFirst("role")?.Value,
+        TenantId = User.FindFirst("tenant_id")?.Value,
+        TenantNom = User.FindFirst("tenant_nom")?.Value,
+        DoitChangerMotDePasse = User.HasClaim("pwd_change", "1"),
+    });
 
-    [Authorize]
+    /// <summary>Change le mot de passe et renvoie une nouvelle session (Session) sans le claim pwd_change.</summary>
     [HttpPost("changer-mot-de-passe")]
+    [Authorize]
     public async Task<IActionResult> ChangerMotDePasse([FromBody] ChangerMotDePasseRequest request)
     {
-        // Extraction de l'ID utilisateur depuis le Token JWT
-        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        if (userIdClaim == null || !Guid.TryParse(userIdClaim, out var userId))
+        if (!Guid.TryParse(ObtenirUtilisateurId(), out var userId))
             return Unauthorized();
 
         var result = await _authService.DefinirNouveauMotDePasseAsync(userId, request);
-        if (!result.IsSuccess)
-            return BadRequest(result);
-
-        return Ok(result);
+        return result.IsSuccess ? Ok(result) : BadRequest(result);
     }
+
+    private string? ObtenirUtilisateurId()
+        => User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
 }

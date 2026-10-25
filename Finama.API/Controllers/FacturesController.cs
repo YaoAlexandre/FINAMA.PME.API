@@ -1,8 +1,9 @@
+using Finama.API.Services;
+using Finama.Core.DTOs;
+using Finama.Infrastructure.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
-using Finama.Core.DTOs;
-using Finama.Infrastructure.Services;
 
 namespace Finama.API.Controllers;
 
@@ -12,10 +13,13 @@ namespace Finama.API.Controllers;
 public class FacturesController : ControllerBase
 {
     private readonly IFactureService _factureService;
-
-    public FacturesController(IFactureService factureService)
+    private readonly ILiaisonComptableService _liaison;
+    private readonly ILogger<FacturesController> _log;
+    public FacturesController(IFactureService factureService, ILiaisonComptableService liaison, ILogger<FacturesController> log)
     {
         _factureService = factureService;
+        _liaison = liaison;
+        _log = log;
     }
 
     /// <summary>
@@ -29,6 +33,11 @@ public class FacturesController : ControllerBase
         {
             var utilisateurId = ObtenirUtilisateurId();
             var result = await _factureService.CreerAsync(request, utilisateurId);
+
+            // Écriture automatique si la liaison comptable est active (un échec n'annule jamais la facture)
+            try { await _liaison.ComptabiliserFactureAsync(result.Id, utilisateurId); }
+            catch (Exception ex) { _log.LogWarning(ex, "Liaison comptable : facture {Id}", result.Id); }
+
             return CreatedAtAction(nameof(Obtenir), new { id = result.Id }, result);
         }
         catch (KeyNotFoundException ex)
@@ -43,7 +52,7 @@ public class FacturesController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> Lister([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
-        var result = await _factureService.ListerAsync(page, pageSize);
+        var result = await _factureService.ListerAsync(Math.Max(1, page), Math.Clamp(pageSize, 1, 100));
         return Ok(result);
     }
 

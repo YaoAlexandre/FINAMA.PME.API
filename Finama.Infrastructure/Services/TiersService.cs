@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Finama.Core.DTOs;
 using Finama.Core.Entities;
+using Finama.Core.Validation;
 using Finama.Infrastructure.Data;
 
 namespace Finama.Infrastructure.Services;
@@ -30,30 +31,26 @@ public class TiersService : ITiersService
     {
         var tenantId = _tenantContext.TenantId ?? Guid.Empty;
 
-        // 🔒 Sécurité : Vérifier l'unicité de l'email au sein du même Tenant uniquement
-        if (!string.IsNullOrEmpty(request.Email))
+        // Contrôle des zones (téléphone E.164, e-mail, longueurs) → 400 avec le message exact
+        var nom = ValidationContact.Nom(request.Nom);
+        var telephone = ValidationContact.Telephone(request.Telephone);
+        var email = ValidationContact.Email(request.Email);
+        var adresse = ValidationContact.Texte(request.Adresse, ValidationContact.AdresseMax, "Adresse");
+        var ninea = ValidationContact.Nif(request.NINEA, "NINEA / NIF");
+
+        // 🔒 Unicité de l'email au sein de l'entreprise uniquement
+        if (email != null)
         {
             var emailExiste = await _db.Tiers
-                .AnyAsync(t => t.Email == request.Email.ToLower() && t.TenantId == tenantId && !t.IsDeleted);
+                .AnyAsync(t => t.Email == email && t.TenantId == tenantId && !t.IsDeleted);
             if (emailExiste)
-                throw new InvalidOperationException($"Un tiers avec l'email '{request.Email}' existe déjà.");
+                throw new InvalidOperationException($"Un tiers avec l'email '{email}' existe déjà.");
         }
 
-        Guid? compteComptableIdFinal = request.CompteComptableId;
-
-        // 🌟 APPROCHE A : Si aucun compte comptable n'est fourni, on le génère automatiquement selon le SYSCOHADA
-        if (!compteComptableIdFinal.HasValue)
-        {
-            compteComptableIdFinal = await GenererEtCreerSousCompteAutomatiqueAsync(request.Nom, request.Type, tenantId);
-        }
-        else
-        {
-            // Vérifier que le compte comptable fourni existe et appartient au système ou au tenant
-            var compteExiste = await _db.CompteComptables
-                .AnyAsync(c => c.Id == compteComptableIdFinal.Value && c.EstActif && (c.EstSysteme || c.TenantId == tenantId));
-            if (!compteExiste)
-                throw new KeyNotFoundException("Compte comptable introuvable, inactif ou non autorisé.");
-        }
+        // Par défaut : un sous-compte propre au tiers (411101, 401101…). Sinon : compte existant choisi, contrôlé.
+        Guid compteComptableIdFinal = request.CompteComptableId is { } choisi && choisi != Guid.Empty
+            ? await ControlerCompteTiersAsync(choisi, request.Type, tenantId, tiersId: null)
+            : await GenererEtCreerSousCompteAutomatiqueAsync(nom, request.Type, tenantId);
 
         // Générer le code interne du Tiers (CLI-XXX, FRN-XXX, etc.) cloisonné par Tenant
         var prefixe = request.Type switch
@@ -79,12 +76,12 @@ public class TiersService : ITiersService
         {
             Id = Guid.NewGuid(),
             Code = $"{prefixe}-{seq:D3}",
-            Nom = request.Nom,
+            Nom = nom,
             Type = (TypeTiers)request.Type,
-            NINEA = request.NINEA,
-            Adresse = request.Adresse,
-            Telephone = request.Telephone,
-            Email = request.Email?.ToLower(),
+            NINEA = ninea,
+            Adresse = adresse,
+            Telephone = telephone,
+            Email = email,
             Devise = request.Devise,
             CompteComptableId = compteComptableIdFinal, // L'ID du sous-compte généré ou fourni
             EstActif = true,
@@ -162,30 +159,40 @@ public class TiersService : ITiersService
             .FirstOrDefaultAsync(t => t.Id == id && t.TenantId == tenantId && !t.IsDeleted)
             ?? throw new KeyNotFoundException("Tiers introuvable.");
 
-        if (!string.IsNullOrEmpty(request.Email) && request.Email.ToLower() != tiers.Email)
+        var nom = ValidationContact.Nom(request.Nom);
+        var telephone = ValidationContact.Telephone(request.Telephone);
+        var email = ValidationContact.Email(request.Email);
+        var adresse = ValidationContact.Texte(request.Adresse, ValidationContact.AdresseMax, "Adresse");
+        var ninea = ValidationContact.Nif(request.NINEA, "NINEA / NIF");
+
+        if (email != null && email != tiers.Email)
         {
             var emailExiste = await _db.Tiers
-                .AnyAsync(t => t.Email == request.Email.ToLower() && t.TenantId == tenantId && t.Id != id && !t.IsDeleted);
+                .AnyAsync(t => t.Email == email && t.TenantId == tenantId && t.Id != id && !t.IsDeleted);
             if (emailExiste)
-                throw new InvalidOperationException($"Un autre tiers utilise déjà l'email '{request.Email}'.");
+                throw new InvalidOperationException($"Un autre tiers utilise déjà l'email '{email}'.");
         }
 
-        tiers.Nom = request.Nom;
-        tiers.NINEA = request.NINEA;
-        tiers.Adresse = request.Adresse;
-        tiers.Telephone = request.Telephone;
-        tiers.Email = request.Email?.ToLower();
+        tiers.Nom = nom;
+        tiers.NINEA = ninea;
+        tiers.Adresse = adresse;
+        tiers.Telephone = telephone;
+        tiers.Email = email;
         tiers.Devise = request.Devise;
         tiers.EstActif = request.EstActif;
 
-        // Note : Si le libellé du tiers change, on met également à jour le libellé du compte associé pour garder la cohérence
-        if (tiers.CompteComptableId.HasValue)
+        // Changement de compte rattaché (les écritures déjà passées restent sur l'ancien compte)
+        if (request.CompteComptableId is { } nouveau && nouveau != Guid.Empty && nouveau != tiers.CompteComptableId)
+            tiers.CompteComptableId = await ControlerCompteTiersAsync(nouveau, (TypeTiersDto)tiers.Type, tenantId ?? Guid.Empty, tiersId: tiers.Id);
+
+        // Le libellé du compte suit le nom du tiers UNIQUEMENT si c'est son sous-compte à lui :
+        // jamais un compte du plan (411100 « Clients divers »…) ni un compte partagé avec un autre tiers.
+        if (tiers.CompteComptableId is { } compteId)
         {
-            var compte = await _db.CompteComptables.FindAsync(tiers.CompteComptableId.Value);
-            if (compte != null)
-            {
-                compte.Libelle = $"{(tiers.Type == TypeTiers.Client ? "Client" : "Fournisseur")} - {request.Nom}";
-            }
+            var compte = await _db.CompteComptables.FindAsync(compteId);
+            var partage = await _db.Tiers.AnyAsync(t => t.CompteComptableId == compteId && t.Id != tiers.Id && !t.IsDeleted);
+            if (compte is { EstSysteme: false } && !partage)
+                compte.Libelle = $"{(tiers.Type == TypeTiers.Fournisseur ? "Fournisseur" : "Client")} - {nom}";
         }
 
         await _db.SaveChangesAsync();
@@ -223,48 +230,74 @@ public class TiersService : ITiersService
         await _db.SaveChangesAsync();
     }
 
-    // ─── Moteur Interne de Génération de Sous-Comptes ────────────────────────
-    private async Task<Guid> GenererEtCreerSousCompteAutomatiqueAsync(string nomTiers, TypeTiersDto typeTiers, Guid tenantId)
+    // ─── Compte choisi à la main : contrôles ──────────────────────────────────
+    /// <summary>
+    /// Le compte doit être un compte de tiers (classe 4) de la bonne famille (41 client, 40 fournisseur, 4 pour un tiers mixte),
+    /// actif et sans sous-compte. Il ne peut être partagé que s'il s'agit d'un compte du plan (ex. 411100 « Clients divers »).
+    /// </summary>
+    private async Task<Guid> ControlerCompteTiersAsync(Guid compteId, TypeTiersDto type, Guid tenantId, Guid? tiersId)
     {
-        // 1. Déterminer la racine SYSCOHADA et le Type de Compte selon la nature du Tiers
-        string racineNumero = typeTiers == TypeTiersDto.Client ? "411" : "401";
-        string prefixeLibelle = typeTiers == TypeTiersDto.Client ? "Client" : "Fournisseur";
+        var compte = await _db.CompteComptables
+            .FirstOrDefaultAsync(c => c.Id == compteId && !c.IsDeleted && (c.EstSysteme || c.TenantId == tenantId))
+            ?? throw new KeyNotFoundException("Compte comptable introuvable.");
 
-        // Trouver le compte parent racine (411 ou 401) dans la base
-        var compteParent = await _db.CompteComptables
-            .FirstOrDefaultAsync(c => c.Numero == racineNumero && (c.EstSysteme || c.TenantId == tenantId));
+        if (!compte.EstActif)
+            throw new InvalidOperationException($"Le compte {compte.Numero} est désactivé.");
 
-        if (compteParent == null)
-            throw new InvalidOperationException($"Le compte collectif racine '{racineNumero}' est introuvable. Veuillez initialiser le plan comptable.");
-
-        // 2. Chercher le dernier numéro de sous-compte attribué pour ce tenant (ex: 411001)
-        var dernierSousCompte = await _db.CompteComptables
-            .Where(c => c.TenantId == tenantId && c.Numero.StartsWith(racineNumero) && c.Numero != racineNumero)
-            .OrderByDescending(c => c.Numero)
-            .Select(c => c.Numero)
-            .FirstOrDefaultAsync();
-
-        int prochaineSequence = 1;
-        if (dernierSousCompte != null)
-        {
-            // Extraction des 3 derniers chiffres séquentiels (ex: 411005 -> 005)
-            string partieSequence = dernierSousCompte.Substring(racineNumero.Length);
-            if (int.TryParse(partieSequence, out var indexActuel))
+        var famille = type switch { TypeTiersDto.Client => "41", TypeTiersDto.Fournisseur => "40", _ => "4" };
+        if (!compte.Numero.StartsWith(famille))
+            throw new InvalidOperationException(type switch
             {
-                prochaineSequence = indexActuel + 1;
-            }
+                TypeTiersDto.Client => $"Un client se rattache à un compte 41… (clients). Le compte {compte.Numero} ne convient pas.",
+                TypeTiersDto.Fournisseur => $"Un fournisseur se rattache à un compte 40… (fournisseurs). Le compte {compte.Numero} ne convient pas.",
+                _ => $"Un tiers se rattache à un compte de la classe 4. Le compte {compte.Numero} ne convient pas."
+            });
+
+        if (await _db.CompteComptables.AnyAsync(c => c.CompteParentId == compte.Id && !c.IsDeleted))
+            throw new InvalidOperationException($"Le compte {compte.Numero} est un compte de regroupement : choisissez un de ses sous-comptes, ou laissez Finama en créer un.");
+
+        if (!compte.EstSysteme)
+        {
+            var autre = await _db.Tiers.Where(t => t.CompteComptableId == compte.Id && t.Id != tiersId && !t.IsDeleted)
+                .Select(t => t.Nom).FirstOrDefaultAsync();
+            if (autre is not null)
+                throw new InvalidOperationException($"Le compte {compte.Numero} est déjà celui de « {autre} ». Choisissez un autre compte ou laissez Finama créer un sous-compte.");
         }
 
-        // 3. Fabriquer le nouveau numéro au format standardisé (Ex: 411 + 001 = 411001)
-        string nouveauNumeroCompte = $"{racineNumero}{prochaineSequence:D3}";
+        return compte.Id;
+    }
+
+    // ─── Moteur Interne de Génération de Sous-Comptes ────────────────────────
+    /// <summary>
+    /// Sous-compte propre au tiers, à 6 chiffres sous 411 ou 401 : 411101, 411102… (411100 « Clients divers » reste libre).
+    /// Le numéro suivant le plus grand déjà pris est utilisé ; un numéro existant n'est jamais réattribué.
+    /// </summary>
+    private async Task<Guid> GenererEtCreerSousCompteAutomatiqueAsync(string nomTiers, TypeTiersDto typeTiers, Guid tenantId)
+    {
+        var racineNumero = typeTiers == TypeTiersDto.Fournisseur ? "401" : "411";
+        var prefixeLibelle = typeTiers == TypeTiersDto.Fournisseur ? "Fournisseur" : "Client";
+
+        var compteParent = await _db.CompteComptables
+            .FirstOrDefaultAsync(c => c.Numero == racineNumero && !c.IsDeleted && (c.EstSysteme || c.TenantId == tenantId))
+            ?? throw new InvalidOperationException($"Le compte collectif « {racineNumero} » est introuvable. Initialisez le plan comptable.");
+
+        // Numéros à 6 chiffres déjà utilisés sous la racine (y compris supprimés : l'index unique les compte encore)
+        var pris = await _db.CompteComptables.IgnoreQueryFilters()
+            .Where(c => c.TenantId == tenantId && c.Numero.StartsWith(racineNumero) && c.Numero.Length == 6)
+            .Select(c => c.Numero).ToListAsync();
+        var sequences = pris.Select(n => int.TryParse(n[3..], out var x) ? x : 0).ToHashSet();
+        var suivant = Math.Max(100, sequences.DefaultIfEmpty(100).Max()) + 1;   // 100 = compte « divers » du plan
+        while (sequences.Contains(suivant)) suivant++;
+        if (suivant > 999)
+            throw new InvalidOperationException($"Plus de numéro libre sous {racineNumero} : créez le sous-compte à la main.");
 
         var nouveauSousCompte = new CompteComptable
         {
             Id = Guid.NewGuid(),
-            Numero = nouveauNumeroCompte,
+            Numero = $"{racineNumero}{suivant:D3}",
             Libelle = $"{prefixeLibelle} - {nomTiers}",
-            Classe = ClasseCompte.Classe4, // Classe 4
-            Type = TypeCompte.Bilan,   // Les tiers appartiennent au Bilan
+            Classe = ClasseCompte.Classe4,
+            Type = TypeCompte.Bilan,
             CompteParentId = compteParent.Id,
             EstSysteme = false,
             EstActif = true,
@@ -272,8 +305,7 @@ public class TiersService : ITiersService
         };
 
         _db.CompteComptables.Add(nouveauSousCompte);
-        // Note : On ne fait pas SaveChangesAsync() ici, il sera persisté en même temps que le Tiers (Atomicité de transaction)
-
+        // Enregistré avec le tiers (même SaveChanges) : tout ou rien
         return nouveauSousCompte.Id;
     }
 
@@ -291,6 +323,7 @@ public class TiersService : ITiersService
         CompteNumero: t.CompteComptable?.Numero,
         CompteLibelle: t.CompteComptable?.Libelle,
         EstActif: t.EstActif,
-        CreatedAt: t.CreatedAt
+        CreatedAt: t.CreatedAt,
+        CompteComptableId: t.CompteComptableId
     );
 }

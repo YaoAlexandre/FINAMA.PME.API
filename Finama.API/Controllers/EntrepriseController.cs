@@ -79,7 +79,9 @@ public class EntrepriseController : ControllerBase
         if (entreprise == null) return NotFound();
 
         // Mise à jour des champs
-        entreprise.Nom = request.Nom;
+        // Mise à jour des champs (nom obligatoire, 2 à 150 caractères)
+        try { entreprise.Nom = Finama.Core.Validation.ValidationContact.Nom(request.Nom, "Nom de l'entreprise"); }
+        catch (ArgumentException ex) { return BadRequest(new { message = ex.Message }); }
         entreprise.Adresse = request.Adresse;
         entreprise.Telephone = request.Telephone;
         entreprise.NumeroFiscal = request.NumeroFiscal;

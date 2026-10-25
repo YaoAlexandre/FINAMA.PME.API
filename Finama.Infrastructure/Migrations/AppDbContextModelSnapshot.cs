@@ -22,6 +22,113 @@ namespace Finama.Infrastructure.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.Entity("Finama.Core.Entities.AbonnementPush", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Appareil")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Auth")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("DateAbonnement")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DernierEnvoi")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Endpoint")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("P256dh")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("UtilisateurId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Endpoint")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "UtilisateurId");
+
+                    b.ToTable("AbonnementsPush", (string)null);
+                });
+
+            modelBuilder.Entity("Finama.Core.Entities.AccesSupport", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AdresseIp")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("DateDebut")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("DateExpiration")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateFin")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("LectureSeule")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Motif")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("SuperAdminId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("SuperAdminNom")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId");
+
+                    b.ToTable("AccesSupports");
+                });
+
             modelBuilder.Entity("Finama.Core.Entities.AppareilConfiance", b =>
                 {
                     b.Property<Guid>("Id")
@@ -207,6 +314,9 @@ namespace Finama.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("Conditions")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -216,25 +326,47 @@ namespace Finama.Infrastructure.Migrations
                     b.Property<DateTime>("DateCreation")
                         .HasColumnType("datetime2");
 
+                    b.Property<DateTime?>("DateDecision")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateEnvoi")
+                        .HasColumnType("datetime2");
+
                     b.Property<DateTime?>("DateExpiration")
                         .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("DevisOrigineId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("FactureId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("FactureNumero")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
                     b.Property<string>("Libelle")
                         .IsRequired()
-                        .HasMaxLength(300)
-                        .HasColumnType("nvarchar(300)");
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("MotifRefus")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<string>("Notes")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Numero")
                         .IsRequired()
                         .HasMaxLength(30)
                         .HasColumnType("nvarchar(30)");
+
+                    b.Property<decimal>("RemiseGlobalePourcent")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
 
                     b.Property<int>("Statut")
                         .HasColumnType("int");
@@ -248,15 +380,18 @@ namespace Finama.Infrastructure.Migrations
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<int>("Version")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
 
                     b.HasIndex("TiersId");
 
-                    b.HasIndex("TenantId", "Numero")
-                        .IsUnique()
-                        .HasFilter("[TenantId] IS NOT NULL");
+                    b.HasIndex("TenantId", "Numero");
 
-                    b.ToTable("Devis", (string)null);
+                    b.HasIndex("TenantId", "Statut");
+
+                    b.ToTable("Devis");
                 });
 
             modelBuilder.Entity("Finama.Core.Entities.Devise", b =>
@@ -312,7 +447,7 @@ namespace Finama.Infrastructure.Migrations
                         {
                             Id = new Guid("11111111-1111-1111-1111-111111111111"),
                             Code = "USD",
-                            CreatedAt = new DateTime(2026, 10, 12, 13, 48, 19, 136, DateTimeKind.Utc).AddTicks(8619),
+                            CreatedAt = new DateTime(2026, 10, 23, 7, 12, 14, 378, DateTimeKind.Utc).AddTicks(9183),
                             DateMiseAJour = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local),
                             EstActive = true,
                             IsDeleted = false,
@@ -324,7 +459,7 @@ namespace Finama.Infrastructure.Migrations
                         {
                             Id = new Guid("22222222-2222-2222-2222-222222222222"),
                             Code = "XOF",
-                            CreatedAt = new DateTime(2026, 10, 12, 13, 48, 19, 170, DateTimeKind.Utc).AddTicks(6370),
+                            CreatedAt = new DateTime(2026, 10, 23, 7, 12, 14, 400, DateTimeKind.Utc).AddTicks(6437),
                             DateMiseAJour = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local),
                             EstActive = true,
                             IsDeleted = false,
@@ -336,7 +471,7 @@ namespace Finama.Infrastructure.Migrations
                         {
                             Id = new Guid("33333333-3333-3333-3333-333333333333"),
                             Code = "EUR",
-                            CreatedAt = new DateTime(2026, 10, 12, 13, 48, 19, 170, DateTimeKind.Utc).AddTicks(6750),
+                            CreatedAt = new DateTime(2026, 10, 23, 7, 12, 14, 400, DateTimeKind.Utc).AddTicks(6600),
                             DateMiseAJour = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local),
                             EstActive = true,
                             IsDeleted = false,
@@ -348,7 +483,7 @@ namespace Finama.Infrastructure.Migrations
                         {
                             Id = new Guid("44444444-4444-4444-4444-444444444444"),
                             Code = "GHS",
-                            CreatedAt = new DateTime(2026, 10, 12, 13, 48, 19, 170, DateTimeKind.Utc).AddTicks(6769),
+                            CreatedAt = new DateTime(2026, 10, 23, 7, 12, 14, 400, DateTimeKind.Utc).AddTicks(6630),
                             DateMiseAJour = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local),
                             EstActive = true,
                             IsDeleted = false,
@@ -360,7 +495,7 @@ namespace Finama.Infrastructure.Migrations
                         {
                             Id = new Guid("55555555-5555-5555-5555-555555555555"),
                             Code = "NGN",
-                            CreatedAt = new DateTime(2026, 10, 12, 13, 48, 19, 170, DateTimeKind.Utc).AddTicks(6797),
+                            CreatedAt = new DateTime(2026, 10, 23, 7, 12, 14, 400, DateTimeKind.Utc).AddTicks(6639),
                             DateMiseAJour = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Local),
                             EstActive = true,
                             IsDeleted = false,
@@ -472,7 +607,9 @@ namespace Finama.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("TenantId");
+                    b.HasIndex("TenantId", "Annee")
+                        .IsUnique()
+                        .HasFilter("[IsDeleted] = 0");
 
                     b.ToTable("Exercices");
                 });
@@ -491,6 +628,9 @@ namespace Finama.Infrastructure.Migrations
 
                     b.Property<DateTime>("DateFacture")
                         .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("DevisId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("Devise")
                         .IsRequired()
@@ -565,14 +705,27 @@ namespace Finama.Infrastructure.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
+                    b.Property<int>("Ordre")
+                        .HasColumnType("int");
+
                     b.Property<decimal>("PrixUnitaireHT")
+                        .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid?>("ProduitId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<decimal>("Quantite")
-                        .HasColumnType("decimal(18,2)");
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<decimal>("RemisePourcent")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
 
                     b.Property<decimal>("TauxTVA")
-                        .HasColumnType("decimal(18,2)");
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
@@ -690,6 +843,132 @@ namespace Finama.Infrastructure.Migrations
                     b.HasIndex("TenantId");
 
                     b.ToTable("LignesFacture");
+                });
+
+            modelBuilder.Entity("Finama.Core.Entities.NotificationEnvoyee", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Cle")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("DateEnvoi")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "Cle")
+                        .IsUnique()
+                        .HasFilter("[TenantId] IS NOT NULL");
+
+                    b.ToTable("NotificationsEnvoyees", (string)null);
+                });
+
+            modelBuilder.Entity("Finama.Core.Entities.ParametresComptables", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("ActiveDepuis")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CompteAchats")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("CompteBanque")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("CompteCaisse")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("CompteClients")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("CompteClientsCaisse")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("CompteFournisseurs")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("CompteMobileMoney")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("CompteRemisesFidelite")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("CompteTvaCollectee")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("CompteTvaDeductible")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("CompteVentes")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("LiaisonActive")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("ValiderAutomatiquement")
+                        .HasColumnType("bit");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId")
+                        .IsUnique()
+                        .HasFilter("[TenantId] IS NOT NULL");
+
+                    b.ToTable("ParametresComptables", (string)null);
                 });
 
             modelBuilder.Entity("Finama.Core.Entities.PaysConfig", b =>
@@ -923,6 +1202,161 @@ namespace Finama.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Finama.Core.Entities.PieceComptabilisee", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("DateComptabilisation")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("EcritureId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<Guid>("SourceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "Source", "SourceId")
+                        .IsUnique()
+                        .HasFilter("[TenantId] IS NOT NULL");
+
+                    b.ToTable("PiecesComptabilisees", (string)null);
+                });
+
+            modelBuilder.Entity("Finama.Core.Entities.ProfilAcces", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Nom")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<string>("Permissions")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "Nom");
+
+                    b.ToTable("ProfilsAcces", (string)null);
+                });
+
+            modelBuilder.Entity("Finama.Core.Entities.ReglementFacture", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("DateReglement")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("EcritureId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("FactureId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("Mode")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Montant")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FactureId");
+
+                    b.HasIndex("TenantId");
+
+                    b.ToTable("ReglementsFacture", (string)null);
+                });
+
+            modelBuilder.Entity("Finama.Core.Entities.SequenceComptable", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Annee")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Cle")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<int>("DernierNumero")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "Cle", "Annee")
+                        .IsUnique();
+
+                    b.ToTable("SequencesComptables", (string)null);
+                });
+
             modelBuilder.Entity("Finama.Core.Entities.Tenant", b =>
                 {
                     b.Property<Guid>("Id")
@@ -971,6 +1405,14 @@ namespace Finama.Infrastructure.Migrations
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
+
+                    b.Property<string>("LogoDataUrl")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("Modules")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(7);
 
                     b.Property<string>("Nom")
                         .IsRequired()
@@ -1117,10 +1559,16 @@ namespace Finama.Infrastructure.Migrations
                     b.Property<DateTime?>("OtpExpireAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<int>("OtpTentatives")
+                        .HasColumnType("int");
+
                     b.Property<string>("Prenom")
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<Guid?>("ProfilId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("RefreshToken")
                         .HasColumnType("nvarchar(max)");
@@ -1144,6 +1592,26 @@ namespace Finama.Infrastructure.Migrations
                         .HasFilter("[TenantId] IS NOT NULL");
 
                     b.ToTable("Utilisateurs");
+                });
+
+            modelBuilder.Entity("Finama.Core.Entities.AbonnementPush", b =>
+                {
+                    b.HasOne("Finama.Core.Entities.Tenant", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("Tenant");
+                });
+
+            modelBuilder.Entity("Finama.Core.Entities.AccesSupport", b =>
+                {
+                    b.HasOne("Finama.Core.Entities.Tenant", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("Tenant");
                 });
 
             modelBuilder.Entity("Finama.Core.Entities.AppareilConfiance", b =>
@@ -1338,6 +1806,64 @@ namespace Finama.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.NoAction);
 
                     b.Navigation("CompteProduits");
+
+                    b.Navigation("Facture");
+
+                    b.Navigation("Tenant");
+                });
+
+            modelBuilder.Entity("Finama.Core.Entities.NotificationEnvoyee", b =>
+                {
+                    b.HasOne("Finama.Core.Entities.Tenant", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("Tenant");
+                });
+
+            modelBuilder.Entity("Finama.Core.Entities.ParametresComptables", b =>
+                {
+                    b.HasOne("Finama.Core.Entities.Tenant", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("Tenant");
+                });
+
+            modelBuilder.Entity("Finama.Core.Entities.PieceComptabilisee", b =>
+                {
+                    b.HasOne("Finama.Core.Entities.Tenant", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("Tenant");
+                });
+
+            modelBuilder.Entity("Finama.Core.Entities.ProfilAcces", b =>
+                {
+                    b.HasOne("Finama.Core.Entities.Tenant", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("Tenant");
+                });
+
+            modelBuilder.Entity("Finama.Core.Entities.ReglementFacture", b =>
+                {
+                    b.HasOne("Finama.Core.Entities.Facture", "Facture")
+                        .WithMany()
+                        .HasForeignKey("FactureId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Finama.Core.Entities.Tenant", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.NoAction);
 
                     b.Navigation("Facture");
 

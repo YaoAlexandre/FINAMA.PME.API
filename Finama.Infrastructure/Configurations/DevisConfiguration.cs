@@ -1,4 +1,4 @@
-﻿using Finama.Core.Entities;
+using Finama.Core.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -8,27 +8,22 @@ public class DevisConfiguration : IEntityTypeConfiguration<Devis>
 {
     public void Configure(EntityTypeBuilder<Devis> b)
     {
-        b.ToTable("Devis");
-        b.HasKey(e => e.Id);
+        b.Property(d => d.Numero).HasMaxLength(30);
+        b.Property(d => d.RemiseGlobalePourcent).HasPrecision(5, 2);
+        b.Property(d => d.FactureNumero).HasMaxLength(30);
+        b.Property(d => d.MotifRefus).HasMaxLength(500);
+        b.HasIndex(d => new { d.TenantId, d.Numero });
+        b.HasIndex(d => new { d.TenantId, d.Statut });
+    }
+}
 
-        // Index unique par Tenant et par Numéro de devis (Crucial pour le multi-tenant)
-        b.HasIndex(e => new { e.TenantId, e.Numero }).IsUnique();
-
-        b.Property(e => e.Numero).HasMaxLength(30).IsRequired();
-        b.Property(e => e.Libelle).HasMaxLength(300).IsRequired();
-        b.Property(e => e.Notes).HasMaxLength(1000);
-        b.Property(e => e.Statut).HasConversion<int>();
-
-        // Ignorer les propriétés calculées pour éviter qu'EF cherche à les créer en colonnes
-        b.Ignore(e => e.TotalHT);
-        b.Ignore(e => e.TotalTVA);
-        b.Ignore(e => e.TotalTTC);
-
-        // Relation avec le Tiers (Interdiction de supprimer un tiers lié à un devis)
-        b.HasOne(e => e.Tiers)
-            .WithMany()
-            .HasForeignKey(e => e.TiersId)
-            .OnDelete(DeleteBehavior.Restrict);
-
+public class LigneDevisConfiguration : IEntityTypeConfiguration<LigneDevis>
+{
+    public void Configure(EntityTypeBuilder<LigneDevis> b)
+    {
+        b.Property(l => l.Quantite).HasPrecision(18, 3);
+        b.Property(l => l.PrixUnitaireHT).HasPrecision(18, 2);
+        b.Property(l => l.RemisePourcent).HasPrecision(5, 2);
+        b.Property(l => l.TauxTVA).HasPrecision(5, 2);
     }
 }
