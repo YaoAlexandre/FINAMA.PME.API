@@ -144,6 +144,12 @@ namespace Finama.Commerce.Migrations
                     b.Property<int>("PointsFidelite")
                         .HasColumnType("int");
 
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
                     b.Property<decimal>("SoldeCredit")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
@@ -1178,6 +1184,10 @@ namespace Finama.Commerce.Migrations
                         .HasColumnType("datetime2");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "ClientRequestId")
+                        .IsUnique()
+                        .HasFilter("[ClientRequestId] <> '00000000-0000-0000-0000-000000000000'");
 
                     b.HasIndex("TenantId", "DateVente");
 

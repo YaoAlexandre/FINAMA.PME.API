@@ -3,6 +3,7 @@ using System.Text;
 using Finama.API.Exports;
 using Finama.Commerce.Application.Common;
 using Finama.Commerce.Core.Domain;
+using Finama.Core.Temps;
 using Finama.Infrastructure.Data;
 using Finama.Infrastructure.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -93,13 +94,13 @@ public class RecusController : ControllerBase
         var caisse = await caisses.AsNoTracking().Where(c => c.Id == v.CaisseId).Select(c => c.Libelle).FirstOrDefaultAsync(ct);
         var client = v.ClientId is { } cid ? await clients.AsNoTracking().Where(c => c.Id == cid).Select(c => c.Nom).FirstOrDefaultAsync(ct) : null;
         var t = await _db.Tenants.AsNoTracking().IgnoreQueryFilters().Where(x => x.Id == v.TenantId)
-            .Select(x => new { x.Nom, x.Adresse, x.Telephone, x.NumeroFiscal, x.LogoDataUrl, Devise = x.Pays.DeviseSymbole })
+            .Select(x => new { x.Nom, x.Adresse, x.Telephone, x.NumeroFiscal, x.LogoDataUrl, Devise = x.Pays.DeviseSymbole, PaysIso = x.Pays.CodeISO })
             .FirstOrDefaultAsync(ct);
 
         var donnees = new RecuPdf.Donnees(
             t?.Nom ?? "", LogoNoirBlanc.Convertir(LogoHelper.Decoder(t?.LogoDataUrl)), t?.Adresse, t?.Telephone, t?.NumeroFiscal,
             magasin?.Nom ?? "", magasin?.Adresse, magasin?.Telephone, caisse ?? "Caisse",
-            v.NumeroTicket, v.DateVente.ToLocalTime(), client, v.Statut == StatutVente.Annulee,
+            v.NumeroTicket, FuseauPays.VersLocal(v.DateVente, t?.PaysIso), client, v.Statut == StatutVente.Annulee,
             v.Lignes.Select(l => new RecuPdf.Ligne(l.Libelle, l.Quantite, l.PrixUnitaireTTC, l.RemiseMontant, l.MontantTTC)).ToList(),
             v.Paiements.Select(p => new RecuPdf.Reglement(LibelleMode(p.Mode), p.Montant, p.Reference)).ToList(),
             v.TotalHT, v.TotalTVA, v.TotalRemise, v.TotalTTC, v.RenduMonnaie,

@@ -114,6 +114,30 @@ public class PosService : IPosService
 
     public async Task<TicketDto> CreerVenteAsync(CreerVenteRequest request, CancellationToken ct = default, OptionsVente? options = null)
     {
+        // Sans identifiant de requête, l'idempotence est impossible (et toutes les ventes « vides » se confondraient).
+        if (request.ClientRequestId == Guid.Empty)
+            throw new BusinessRuleException("Identifiant de requête manquant (ClientRequestId).");
+
+        try
+        {
+            return await CreerVenteInterneAsync(request, ct, options);
+        }
+        catch (DbUpdateException)
+        {
+            // Course entre deux renvois du même ticket : l'index unique (TenantId, ClientRequestId) a refusé le second.
+            // On renvoie la vente déjà enregistrée par l'autre requête.
+            _db.ChangeTracker.Clear();
+            var existante = await _db.Ventes.AsNoTracking()
+                .Include(v => v.Lignes)
+                .Include(v => v.Paiements)
+                .FirstOrDefaultAsync(v => v.ClientRequestId == request.ClientRequestId, ct);
+            if (existante != null) return ChargerTicketDto(existante);
+            throw;
+        }
+    }
+
+    private async Task<TicketDto> CreerVenteInterneAsync(CreerVenteRequest request, CancellationToken ct, OptionsVente? options)
+    {
         // Le PIN est vérifié HORS transaction : un PIN faux lève une exception qui annule la transaction de vente,
         // et le compteur d'échecs (verrouillage) serait annulé avec elle. Ici il est enregistré immédiatement.
         Guid? superviseurValideId = null;

@@ -32,6 +32,12 @@ public class VenteConfiguration : IEntityTypeConfiguration<Vente>
 
         builder.HasIndex(v => new { v.TenantId, v.NumeroTicket }).IsUnique();
         builder.HasIndex(v => new { v.TenantId, v.DateVente });
+
+        // Idempotence garantie par la base : deux renvois simultanés du même ticket ne peuvent pas créer deux ventes.
+        // Filtré : les anciennes ventes enregistrées sans identifiant (Guid vide) ne bloquent pas la migration.
+        builder.HasIndex(v => new { v.TenantId, v.ClientRequestId })
+               .IsUnique()
+               .HasFilter("[ClientRequestId] <> '00000000-0000-0000-0000-000000000000'");
     }
 }
 

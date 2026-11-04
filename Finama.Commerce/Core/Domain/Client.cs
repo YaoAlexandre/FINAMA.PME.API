@@ -23,6 +23,13 @@ namespace Finama.Commerce.Core.Domain
         public DateTime DateCreation { get; set; }
         public DateTime? DateDerniereVente { get; set; }
         public bool EstActif { get; set; } = true;
+
+        /// <summary>
+        /// Concurrence optimiste : deux caisses qui vendent au même client ne peuvent plus écraser
+        /// le solde de crédit ni les points (la vente est rejouée par Transactions.ExecuterAsync).
+        /// </summary>
+        [System.ComponentModel.DataAnnotations.Timestamp]
+        public byte[] RowVersion { get; set; } = [];
     }
 
     /// <summary>Journal de fidélité : insertion seule. Points signés (+ gain, − utilisation).</summary>
